@@ -152,8 +152,12 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     /** Test builds: while the game runs, the tail of its log goes to the server every minute (a freeze shows up without exiting). */
     private fun liveLog(layout: GameLayout) {
         val t = Thread({
+            // right away what is being launched (if the JVM dies natively there may be nothing else), then at 15 s and every minute
+            LogUpload.send(this, "start", LogUpload.tail(File(layout.client, "logs/launch-command.txt"), 5) + "--- logcat\n" + LogUpload.logcat(300))
+            var first = true
             while (true) {
-                Thread.sleep(60_000)
+                Thread.sleep(if (first) 15_000 else 60_000)
+                first = false
                 val text = "uptime ${SystemClock.elapsedRealtime() / 1000} s\n" +
                     LogUpload.tail(File(layout.client, "logs/latest.log"), 300) +
                     LogUpload.tail(File(layout.client, "logs/launcher-native.log"), 100) +

@@ -86,6 +86,14 @@ class DevActivity : Activity() {
         thread(name = "cubex-probe") { Relay.probe(); runOnUiThread { say("связь: ${if (Relay.enabled) "через Москву" else "напрямую"}") } }
         SelfUpdate.onStatus = { s -> if (s != null) say(s) }
         SelfUpdate.start(this)
+        // a crash of the last run (ours or Android's account of it) goes to the developers before anything else
+        thread(name = "cubex-crashes") {
+            val report = site.cubexcraft.mobile.CrashReporter.pending(this) ?: return@thread
+            say("прошлый запуск упал — отправляю отчёт разработчикам")
+            val ok = LogUpload.send(this, "appcrash", report + "\n--- logcat\n" + LogUpload.logcat(1500))
+            say(if (ok) "отчёт о падении отправлен" else "отчёт о падении не отправлен")
+            runOnUiThread { say(report.lines().take(12).joinToString("\n")) }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

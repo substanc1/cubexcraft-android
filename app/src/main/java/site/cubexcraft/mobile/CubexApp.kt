@@ -10,6 +10,7 @@ import site.cubexcraft.mobile.net.Relay
 class CubexApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
         Api.appVersion = packageManager.getPackageInfo(packageName, 0).versionName ?: "3.0.0"
         Relay.init(this)
         Core.setHost(Host(this))

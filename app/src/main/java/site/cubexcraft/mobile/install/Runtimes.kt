@@ -25,7 +25,10 @@ object Runtimes {
     fun ensure(ctx: Context): Paths {
         val root = File(ctx.filesDir, "runtime")
         val javaHome = File(root, "jre-21")
-        val stamp = "${assetText(ctx, "$JRE/version")}/${ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode}"
+        // by content, not by app version: an update of the app code must not unpack the same Java again (10-20 s)
+        val stamp = "${assetText(ctx, "$JRE/version")}/" + listOf("$JRE/universal.tar.xz", "$JRE/bin-arm64.tar.xz", "$LWJGL_JARS/version")
+            .joinToString("/") { runCatching { ctx.assets.openFd(it).use { fd -> fd.length } }.getOrDefault(-1L).toString() } +
+            "/" + (ctx.assets.list(LWJGL_JARS)?.size ?: 0)
         val marker = File(javaHome, ".cubex-version")
         if (!marker.isFile || marker.readText() != stamp) {
             val t = System.currentTimeMillis()
