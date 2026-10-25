@@ -3,12 +3,17 @@ package site.cubexcraft.mobile.game
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.text.InputType
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.util.Log
 import android.view.KeyEvent
-import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -20,6 +25,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import net.kdt.pojavlaunch.utils.JREUtils
 import org.json.JSONObject
@@ -31,8 +37,6 @@ import site.cubexcraft.mobile.install.GameLayout
 import site.cubexcraft.mobile.install.Runtimes
 import site.cubexcraft.mobile.net.LogUpload
 import java.io.File
-import kotlin.math.abs
-import kotlin.math.hypot
 
 /**
  * The game screen, in its own process (":game"): the JVM runs inside the process and cannot be started twice, so when the game
@@ -47,9 +51,70 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         const val EXTRA_JOIN = "join"
         const val EXTRA_SCALE = "scale"
         private const val TAG = "CubexGame"
+
+        // «#» starts a section (the same text as CubeXCraft for iPhone)
+        private val HELP_RU = listOf(
+            "#" to "ЖЕСТЫ",
+            "Палец по экрану" to "Обзор — повернуть камеру.",
+            "Тап" to "Поставить блок, открыть, использовать (ПКМ).",
+            "Удержание" to "Ломать и бить (ЛКМ): держите палец на месте 0,3 с.",
+            "Тап двумя пальцами" to "Взять блок под прицелом в руку (СКМ).",
+            "Тап по хотбару" to "Выбрать предмет в руку.",
+            "#" to "КНОПКИ",
+            "Джойстик" to "Слева внизу — ходьба; до упора вперёд — бег.",
+            "Прыжок" to "Прыгнуть; в воде — всплыть.",
+            "Присесть" to "Красться; не даёт упасть с края блока.",
+            "Бег" to "Включает и выключает бег — жёлтая, пока бег включён.",
+            "Выброс" to "Выбросить предмет из руки.",
+            "Взять" to "Взять блок под прицелом в руку.",
+            "Скрыть / Показать" to "Спрятать кнопки — остаются ходьба, прыжок, присесть и бег.",
+            "Чат" to "Открыть чат и клавиатуру.",
+            "Инвентарь" to "Открыть инвентарь.",
+            "Игроки" to "Список игроков — включить и выключить.",
+            "Вид 1/3" to "Вид от первого или третьего лица.",
+            "F3" to "Экран отладки: кадры в секунду, координаты.",
+            "Пауза" to "Меню паузы и настройки.",
+            "#" to "В МЕНЮ И ИНВЕНТАРЕ",
+            "Палец" to "Курсор: тап — нажать, вести — перетащить предмет.",
+            "Второй палец" to "Вести — прокрутка; тап — ПКМ (взять половину стопки).",
+            "Назад" to "Закрыть окно.",
+            "Клавиатура" to "Ввести текст: поиск, табличка, наковальня.",
+            "i" to "Эта подсказка.",
+        )
+        private val HELP_EN = listOf(
+            "#" to "GESTURES",
+            "Swipe" to "Look around — turn the camera.",
+            "Tap" to "Place a block, open, use (right click).",
+            "Hold" to "Break and attack (left click): keep the finger still for 0.3 s.",
+            "Two-finger tap" to "Pick the block you are looking at (middle click).",
+            "Tap the hotbar" to "Pick the item to hold.",
+            "#" to "BUTTONS",
+            "Joystick" to "Bottom left — walk; push fully forward to sprint.",
+            "Jump" to "Jump; in water — swim up.",
+            "Sneak" to "Sneak; keeps you from falling off edges.",
+            "Sprint" to "Turns sprinting on and off — yellow while it is on.",
+            "Drop" to "Drop the item in your hand.",
+            "Pick" to "Pick the block you are looking at.",
+            "Hide / Show" to "Hide the buttons — walking, jump, sneak and sprint stay.",
+            "Chat" to "Open the chat and the keyboard.",
+            "Inventory" to "Open the inventory.",
+            "Players" to "Player list — on and off.",
+            "View 1/3" to "First or third person view.",
+            "F3" to "Debug screen: frames per second, coordinates.",
+            "Pause" to "Pause menu and settings.",
+            "#" to "MENUS AND INVENTORY",
+            "Finger" to "The cursor: tap to click, drag to move an item.",
+            "Second finger" to "Drag to scroll; tap for a right click (take half a stack).",
+            "Back" to "Close the window.",
+            "Keyboard" to "Type: search, signs, anvil.",
+            "i" to "This help.",
+        )
     }
 
     private lateinit var view: GameView
+    private lateinit var controls: TouchControls
+    private lateinit var root: FrameLayout
+    private var help: View? = null
     private var started = false
     private var viewW = 0
     private var viewH = 0
@@ -64,24 +129,89 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         (Core.host() as? Host)?.scale = scale
         view = GameView(this)
         view.holder.addCallback(this)
-        val root = FrameLayout(this)
+        val layout = GameLayout(this, intent.getStringExtra(EXTRA_FILES_DIR) ?: "CubeXCraft-mobile")
+        controls = TouchControls(this, File(layout.client, "options.txt"),
+            onKeyboard = { show -> keyboard(show) },
+            onHelp = { showHelp() },
+            onGrab = { grabbing -> if (grabbing) keyboard(false) },
+        )
+        root = FrameLayout(this)
         root.addView(view)
-        root.addView(TextView(this).apply {
-            text = "⌨"
-            textSize = 20f
-            setTextColor(0x99F0E2E3.toInt())
-            setPadding(24, 12, 24, 12)
-            setOnClickListener { view.toggleKeyboard() }
-        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, android.view.Gravity.TOP or android.view.Gravity.END))
+        root.addView(controls)
         setContentView(root)
+        CallbackBridge.addGrabListener(controls)
         immersive()
     }
 
+    override fun onDestroy() {
+        CallbackBridge.removeGrabListener(controls)
+        super.onDestroy()
+    }
+
+    @Suppress("DEPRECATION")
     private fun immersive() {
-        window.insetsController?.let {
-            it.hide(WindowInsets.Type.systemBars())
-            it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.let {
+                it.hide(WindowInsets.Type.systemBars())
+                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            // Android 8-10
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
         }
+    }
+
+    /** The on-screen keyboard: true = show, false = hide, null = toggle. Typed text goes into the game through GameView. */
+    private fun keyboard(show: Boolean?) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        when (show) {
+            true -> { view.requestFocus(); imm.showSoftInput(view, 0) }   // 0 = asked by the player (not implicit)
+            false -> imm.hideSoftInputFromWindow(view.windowToken, 0)
+            null -> view.toggleKeyboard()
+        }
+    }
+
+    /** «i»: what the gestures and buttons do; a tap anywhere closes it. */
+    private fun showHelp() {
+        if (help != null) return
+        val ru = java.util.Locale.getDefault().language == "ru"
+        val rows = if (ru) HELP_RU else HELP_EN
+        val sb = SpannableStringBuilder()
+        for ((name, desc) in rows) {
+            if (name == "#") {
+                if (sb.isNotEmpty()) sb.append("\n")
+                val s = sb.length
+                sb.append(desc).append("\n")
+                sb.setSpan(ForegroundColorSpan(0xFFFF2A3C.toInt()), s, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.setSpan(StyleSpan(Typeface.BOLD), s, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            } else {
+                val s = sb.length
+                sb.append(name)
+                sb.setSpan(StyleSpan(Typeface.BOLD), s, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.append(" — ").append(desc).append("\n")
+            }
+        }
+        val pad = (24 * resources.displayMetrics.density).toInt()
+        val panel = ScrollView(this).apply {
+            setBackgroundColor(0xF00B0509.toInt())
+            addView(TextView(this@GameActivity).apply {
+                text = sb
+                textSize = 14f
+                setTextColor(0xFFF0E2E3.toInt())
+                setPadding(pad, pad, pad, pad)
+                setOnClickListener { closeHelp() }
+            })
+            setOnClickListener { closeHelp() }
+        }
+        help = panel
+        root.addView(panel, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun closeHelp() {
+        help?.let { root.removeView(it) }
+        help = null
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -171,7 +301,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            CallbackBridge.sendKeyPress(Glfw.KEY_ESCAPE)
+            if (help != null) closeHelp() else CallbackBridge.sendKeyPress(Glfw.KEY_ESCAPE)
             return true
         }
         return view.sendKey(event, true) || super.onKeyDown(keyCode, event)
@@ -182,80 +312,11 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         return view.sendKey(event, false) || super.onKeyUp(keyCode, event)
     }
 
-    /** Touch for the first test build: in menus the finger is the cursor; in the world drag = look, tap = hit, hold = break. */
+    /** The game's surface; touches are TouchControls' (on top of it), the keyboard's text comes in here. */
     inner class GameView(ctx: Context) : SurfaceView(ctx) {
-        private var downX = 0f
-        private var downY = 0f
-        private var lastX = 0f
-        private var lastY = 0f
-        private var downAt = 0L
-        private var holding = false
-        private var moved = false
-        private val sensitivity = 1.6f
-
         init {
             isFocusable = true
             isFocusableInTouchMode = true
-        }
-
-        private fun fx(x: Float) = x * fbW / viewW.coerceAtLeast(1)
-        private fun fy(y: Float) = y * fbH / viewH.coerceAtLeast(1)
-
-        private val holdCheck = Runnable {
-            if (!moved && CallbackBridge.isGrabbing()) {
-                holding = true
-                CallbackBridge.sendMouseButton(Glfw.MOUSE_LEFT, true)
-            }
-        }
-
-        override fun onTouchEvent(e: MotionEvent): Boolean {
-            val grab = CallbackBridge.isGrabbing()
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = e.x; downY = e.y; lastX = e.x; lastY = e.y
-                    downAt = SystemClock.uptimeMillis()
-                    moved = false
-                    holding = false
-                    if (grab) {
-                        postDelayed(holdCheck, 300)
-                    } else {
-                        CallbackBridge.sendCursorPos(fx(e.x), fy(e.y))
-                        CallbackBridge.sendMouseButton(Glfw.MOUSE_LEFT, true)
-                    }
-                }
-                MotionEvent.ACTION_POINTER_DOWN -> if (grab) {
-                    // second finger: use / place
-                    CallbackBridge.sendMouseButton(Glfw.MOUSE_RIGHT, true)
-                    CallbackBridge.sendMouseButton(Glfw.MOUSE_RIGHT, false)
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (hypot(e.x - downX, e.y - downY) > 12) moved = true
-                    if (grab) {
-                        val dx = (e.x - lastX) * sensitivity
-                        val dy = (e.y - lastY) * sensitivity
-                        CallbackBridge.sendCursorPos(CallbackBridge.mouseX + dx, CallbackBridge.mouseY + dy)
-                    } else {
-                        CallbackBridge.sendCursorPos(fx(e.x), fy(e.y))
-                    }
-                    lastX = e.x; lastY = e.y
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    removeCallbacks(holdCheck)
-                    if (grab) {
-                        if (holding) {
-                            CallbackBridge.sendMouseButton(Glfw.MOUSE_LEFT, false)
-                        } else if (!moved && SystemClock.uptimeMillis() - downAt < 300 && abs(e.x - downX) < 12) {
-                            CallbackBridge.sendMouseButton(Glfw.MOUSE_LEFT, true)
-                            CallbackBridge.sendMouseButton(Glfw.MOUSE_LEFT, false)
-                        }
-                    } else {
-                        CallbackBridge.sendCursorPos(fx(e.x), fy(e.y))
-                        CallbackBridge.sendMouseButton(Glfw.MOUSE_LEFT, false)
-                    }
-                    holding = false
-                }
-            }
-            return true
         }
 
         fun toggleKeyboard() {
