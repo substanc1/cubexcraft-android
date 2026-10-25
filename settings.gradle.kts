@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "cubexcraft-android"
 include(":core")
+include(":app")

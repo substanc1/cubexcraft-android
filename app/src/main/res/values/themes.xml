@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- © 2026 CubeXCraft. Source-available, view only — see LICENSE. Colours: design handoff android3/tokens.json. -->
+<resources>
+    <color name="cx_bg">#0B0509</color>
+    <color name="cx_panel">#14090D</color>
+    <color name="cx_line">#3A0D13</color>
+    <color name="cx_line2">#5E141D</color>
+    <color name="cx_text">#F0E2E3</color>
+    <color name="cx_muted">#B09BA0</color>
+    <color name="cx_dim">#8A6167</color>
+    <color name="cx_accent">#FF2A3C</color>
+    <color name="cx_success">#00FF9F</color>
+    <color name="cx_warning">#FCEE0A</color>
+    <color name="cx_field">#0E0609</color>
+    <color name="cx_track">#2A0810</color>
+
+    <!-- plain framework theme: no AppCompat or Material, nothing to inflate before the first frame -->
+    <style name="Theme.Cubex" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/cx_bg</item>
+        <item name="android:statusBarColor">@color/cx_bg</item>
+        <item name="android:navigationBarColor">@color/cx_bg</item>
+        <item name="android:colorAccent">@color/cx_accent</item>
+        <item name="android:textColorPrimary">@color/cx_text</item>
+        <item name="android:textColor">@color/cx_text</item>
+    </style>
+
+    <style name="Theme.Cubex.Game" parent="Theme.Cubex">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>
