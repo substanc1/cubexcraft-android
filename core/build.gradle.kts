@@ -35,15 +35,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    sourceSets {
-        getByName("main") {
-            // the Java side of the bridge is being slimmed down from Amethyst; until then only the native part is built
-            java.setSrcDirs(emptyList<String>())
-        }
-    }
 }
 
 dependencies {
     implementation("com.bytedance:bytehook:1.0.10")
+    implementation("androidx.annotation:annotation:1.9.1")
 }
