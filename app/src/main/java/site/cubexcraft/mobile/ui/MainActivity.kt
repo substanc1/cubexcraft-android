@@ -303,7 +303,8 @@ class MainActivity : Activity() {
                         .putExtra(GameActivity.EXTRA_USERNAME, s.getString("username"))
                         .putExtra(GameActivity.EXTRA_UUID, s.getString("uuid"))
                         .putExtra(GameActivity.EXTRA_TOKEN, s.getString("accessToken"))
-                        .putExtra(GameActivity.EXTRA_JOIN, server != null)
+                        // «Сразу на сервер» without the list loaded yet: the game takes the profile's server
+                        .putExtra(GameActivity.EXTRA_JOIN, server != null || Settings.joinServer)
                         .putExtra(GameActivity.EXTRA_SERVER, server)
                         .putExtra(GameActivity.EXTRA_SCALE, Settings.renderScale(this))
                 )
