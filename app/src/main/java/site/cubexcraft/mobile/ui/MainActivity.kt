@@ -134,13 +134,14 @@ class MainActivity : Activity() {
         }
         setContentView(frame)
 
+        // first the things that must work even if a screen is broken: crash reports and the update that fixes it
+        uploadCrashReports()
+        SelfUpdate.onState = { st -> runOnUiThread { runCatching { Dialogs.update(this, st) } } }
+        SelfUpdate.start(this)
+        thread(name = "cubex-probe") { Relay.probe() }
         Repo.init(this)
         replaceAll(firstScreen())
         handleExit(intent)
-        thread(name = "cubex-probe") { Relay.probe() }
-        SelfUpdate.onState = { st -> runOnUiThread { Dialogs.update(this, st) } }
-        SelfUpdate.start(this)
-        uploadCrashReports()
     }
 
     private fun firstScreen(): Screen = when {
@@ -158,10 +159,29 @@ class MainActivity : Activity() {
 
     private fun setScreen(s: Screen) {
         frame.removeAllViews()
-        (s.view.parent as? FrameLayout)?.removeView(s.view)
-        frame.addView(s.view, FrameLayout.LayoutParams(MATCH, MATCH))
-        dialog?.let { frame.addView(it) }
-        s.onShow()
+        try {
+            (s.view.parent as? FrameLayout)?.removeView(s.view)
+            frame.addView(s.view, FrameLayout.LayoutParams(MATCH, MATCH))
+            dialog?.let { frame.addView(it) }
+            s.onShow()
+        } catch (t: Throwable) {
+            // a broken screen must not close the app: the update that fixes it is downloading meanwhile
+            Log.e(TAG, "screen ${s.javaClass.simpleName} failed", t)
+            frame.removeAllViews()
+            frame.addView(brokenScreen(t), FrameLayout.LayoutParams(MATCH, MATCH))
+            thread(name = "cubex-ui-error") { LogUpload.send(this, "error", "screen ${s.javaClass.simpleName}: " + Log.getStackTraceString(t)) }
+        }
+    }
+
+    private fun brokenScreen(t: Throwable): View = vbox().apply {
+        setPadding(dp(16), dp(24), dp(16), dp(24))
+        addView(text("CubeX Mobile ${BuildConfig.VERSION_NAME}", Cx.Font.DISPLAY_SEMI, 15f, Cx.TEXT))
+        addView(text(L.t("Экран не открылся. Мы уже получили отчёт; обновление придёт само.", "This screen failed to open. We got the report; an update will come by itself."),
+            Cx.Font.BODY, 14f, Cx.SOFT), lp().margins(t = dp(12)))
+        addView(text(t.toString().take(300), Cx.Font.MONO, 12f, Cx.WARNING), lp().margins(t = dp(12)))
+        addView(button(L.t("Поделиться журналом", "Share the log"), BtnStyle.OUTLINE) {
+            thread(name = "cubex-sharelog") { RunLog.collect(this@MainActivity); runOnUiThread { RunLog.share(this@MainActivity) } }
+        }, lp(MATCH, dp(52)).margins(t = dp(16)))
     }
 
     fun open(s: Screen) {

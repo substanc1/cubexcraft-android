@@ -51,7 +51,8 @@ class HomeScreen(main: MainActivity) : Screen(main) {
             plan = null
         }
 
-        private fun rerender() = ui.post { current?.render() }
+        /** [full] = false: only the build card and the button (progress ticks). */
+        private fun rerender(full: Boolean = true) = ui.post { current?.let { if (full) it.render() else { it.renderBuild(); it.renderBottom() } } }
     }
 
     private lateinit var header: LinearLayout
@@ -143,7 +144,7 @@ class HomeScreen(main: MainActivity) : Screen(main) {
                 inst.onProgress = site.cubexcraft.mobile.net.SyncProgress { _, _, bytes, total ->
                     updDone = bytes; updTotal = total
                     val now = System.currentTimeMillis()
-                    if (now - last > 250) { last = now; rerender() }
+                    if (now - last > 250) { last = now; rerender(full = false) }
                 }
                 inst.run(p)
                 Runtimes.ensure(app)
