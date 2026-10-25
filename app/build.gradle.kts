@@ -40,6 +40,9 @@ android {
             // test builds sit next to the released app on the phone
             applicationIdSuffix = ".v3dev"
             versionNameSuffix = "-dev." + ((project.findProperty("cubexBuild") as String?) ?: "0")
+            // shrunk like the release: what R8 would break (JNI, the JavaScript bridge) shows up on a test build first
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         release {
             isMinifyEnabled = true
