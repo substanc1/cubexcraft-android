@@ -45,7 +45,20 @@ class Installer(private val ctx: Context, private val token: String) {
 
     class Result(val profile: JSONObject, val layout: GameLayout)
 
-    fun run(): Result {
+    /**
+     * What a start needs: the files to fetch ([jobs], [bytes]) out of the whole build ([totalBytes]); [mods] — the mods' file
+     * names, for the build card. Checking is fast after the first time (hash cache).
+     */
+    class Plan(
+        val profile: JSONObject, val layout: GameLayout, val manifest: Manifest, val jobs: List<Download>, val keep: Set<String>,
+        val cache: HashCache, val totalBytes: Long, val mods: List<String>,
+    ) {
+        val bytes get() = jobs.sumOf { it.size }
+    }
+
+    private var total = 0L
+
+    fun plan(): Plan {
         onStatus("Получаю сборку CubeXTech…")
         val profile = mobileProfile()
         val filesDir = profile.optJSONObject("mobile")?.optString("filesDir")?.ifEmpty { null } ?: profile.getString("dir")
@@ -58,6 +71,7 @@ class Installer(private val ctx: Context, private val token: String) {
         val assetManifest = Api.manifest(token, profile.optString("assetDir", "assets"))
         val cache = HashCache(File(layout.root, ".cubex-hashes.json"))
         val jobs = ArrayList<Download>()
+        total = 0L
 
         onStatus("Проверяю файлы сборки (${manifest.files.size})…")
         planClient(manifest, profile, layout, cache, jobs)
@@ -66,21 +80,26 @@ class Installer(private val ctx: Context, private val token: String) {
         onStatus("Проверяю ресурсы игры (${assetManifest.files.size})…")
         for (e in assetManifest.files.values) add(assetManifest, e, Sync.safeFile(layout.assets, e.path), cache, jobs)
         cache.save()
-        if (cancelled) throw InterruptedException("cancelled")
+        val mods = (manifest.files.keys + desktopMods).filter { it.startsWith("mods/") && it.endsWith(".jar") }.map { it.substringAfterLast('/') }.sorted()
+        return Plan(profile, layout, manifest, jobs, desktopMods, cache, total, mods)
+    }
 
-        if (jobs.isNotEmpty()) {
-            onStatus("Скачиваю ${jobs.size} файлов…")
-            Sync.fetchAll(Api.http, jobs, onProgress)
-            for (j in jobs) cache.remember(j.dest, j.sha1)
-            cache.save()
+    fun run(plan: Plan = plan()): Result {
+        if (cancelled) throw InterruptedException("cancelled")
+        if (plan.jobs.isNotEmpty()) {
+            onStatus("Скачиваю ${plan.jobs.size} файлов…")
+            Sync.fetchAll(Api.http, plan.jobs, onProgress) { cancelled }
+            for (j in plan.jobs) plan.cache.remember(j.dest, j.sha1)
+            plan.cache.save()
         }
         if (cancelled) throw InterruptedException("cancelled")
 
-        removeExtras(manifest, profile, layout, desktopMods)
-        Tweaks.apply(layout.client, manifest)
-        layout.profileFile.writeText(profile.toString())
+        removeExtras(plan.manifest, plan.profile, plan.layout, plan.keep)
+        Tweaks.apply(plan.layout.client, plan.manifest)
+        plan.layout.profileFile.writeText(plan.profile.toString())
+        BuildInfo.save(ctx, plan)
         onStatus("Сборка готова")
-        return Result(profile, layout)
+        return Result(plan.profile, plan.layout)
     }
 
     /** The CubeXTech profile with a "mobile" block: on an unknown platform the server would hand out the desktop ones. */
@@ -97,6 +116,7 @@ class Installer(private val ctx: Context, private val token: String) {
     }
 
     private fun add(m: Manifest, e: FileEntry, dest: File, cache: HashCache, jobs: MutableList<Download>) {
+        total += e.size
         if (!cache.matches(dest, e.size, e.sha1)) jobs += Download(m.base + Sync.encodePath(e.path), dest, e.size, e.sha1)
     }
 

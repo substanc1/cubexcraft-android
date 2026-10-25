@@ -14,5 +14,8 @@ class CubexApp : Application() {
         Api.appVersion = packageManager.getPackageInfo(packageName, 0).versionName ?: "3.0.0"
         Relay.init(this)
         Core.setHost(Host(this))
+        // both cheap: a context and the preferences (fonts load on first use)
+        site.cubexcraft.mobile.ui.Cx.init(this)
+        site.cubexcraft.mobile.ui.Settings.init(this)
     }
 }

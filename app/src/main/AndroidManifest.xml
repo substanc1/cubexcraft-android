@@ -25,8 +25,9 @@
         android:theme="@style/Theme.Cubex">
 
         <activity
-            android:name=".ui.DevActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode|screenLayout|smallestScreenSize"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

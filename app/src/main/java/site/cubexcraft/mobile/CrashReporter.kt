@@ -14,7 +14,7 @@ import java.util.Locale
 /**
  * Crashes that kill a process before it can send its log: a Java crash is written to a file synchronously by the default
  * handler; why a process ended (Java or native crash, low memory, killed) comes from Android itself (ApplicationExitInfo, 11+).
- * The next start sends both (DevActivity → LogUpload, kind "appcrash").
+ * The next start sends both (MainActivity → LogUpload, kind "appcrash").
  */
 object CrashReporter {
     private const val TAG = "CubexCrash"

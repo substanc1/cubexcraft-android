@@ -9,6 +9,7 @@ import java.io.IOException
 import java.io.RandomAccessFile
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
@@ -62,7 +63,7 @@ object Sync {
     private fun isValid(f: File, size: Long, sha1: String): Boolean =
         f.isFile && (size <= 0 || f.length() == size) && (sha1.isEmpty() || sha1(f) == sha1)
 
-    private fun fetch(http: OkHttpClient, d: Download, bytes: AtomicLong) {
+    private fun fetch(http: OkHttpClient, d: Download, bytes: AtomicLong, cancel: () -> Boolean) {
         d.dest.parentFile?.mkdirs()
         val tmp = File(d.dest.path + ".part")
         http.newCall(Request.Builder().url(d.url).build()).execute().use { r ->
@@ -71,6 +72,7 @@ object Sync {
                 tmp.outputStream().use { o ->
                     val buf = ByteArray(1 shl 16)
                     while (true) {
+                        if (cancel()) throw CancellationException("cancelled")
                         val n = i.read(buf)
                         if (n < 0) break
                         o.write(buf, 0, n)
@@ -83,7 +85,7 @@ object Sync {
     }
 
     /** Bytes [start, end] of the file into [tmp] at the same offset; the server must answer 206. */
-    private fun fetchRange(http: OkHttpClient, url: String, tmp: File, start: Long, end: Long, bytes: AtomicLong) {
+    private fun fetchRange(http: OkHttpClient, url: String, tmp: File, start: Long, end: Long, bytes: AtomicLong, cancel: () -> Boolean) {
         val request = Request.Builder().url(url).header("Range", "bytes=$start-$end").build()
         http.newCall(request).execute().use { r ->
             if (r.code != 206) throw IOException("HTTP ${r.code} (no range support) for $url")
@@ -93,6 +95,7 @@ object Sync {
                 var written = 0L
                 r.body!!.byteStream().use { i ->
                     while (true) {
+                        if (cancel()) throw CancellationException("cancelled")
                         val n = i.read(buf)
                         if (n < 0) break
                         out.write(buf, 0, n)
@@ -128,7 +131,8 @@ object Sync {
         throw last!!
     }
 
-    fun fetchAll(http: OkHttpClient, downloads: List<Download>, progress: SyncProgress? = null) {
+    /** [cancel] is checked while reading: a cancelled download stops within one buffer (CancellationException, not retried). */
+    fun fetchAll(http: OkHttpClient, downloads: List<Download>, progress: SyncProgress? = null, cancel: () -> Boolean = { false }) {
         val total = downloads.size
         if (total == 0) return
         val bytesTotal = downloads.sumOf { it.size }
@@ -149,7 +153,7 @@ object Sync {
                     val start = i * CHUNK
                     val end = minOf(d.size, start + CHUNK) - 1
                     big += {
-                        fetchRange(http, d.url, tmp, start, end, bytes)
+                        fetchRange(http, d.url, tmp, start, end, bytes, cancel)
                         if (left.decrementAndGet() == 0) {
                             finish(tmp, d)
                             done.incrementAndGet()
@@ -159,7 +163,7 @@ object Sync {
                 }
             } else {
                 (if (d.size > SMALL_FILE) big else small) += {
-                    fetch(http, d, bytes)
+                    fetch(http, d, bytes, cancel)
                     done.incrementAndGet()
                     report()
                 }

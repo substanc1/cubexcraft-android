@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- © 2026 CubeXCraft (https://www.cubexcraft.site). Source-available, view only — see LICENSE. CubeX Mobile 3.0 design icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30dp" android:height="33dp" android:viewportWidth="86" android:viewportHeight="96">
+    <path android:pathData="M43,2 L82,24 L82,72 L43,94 L4,72 L4,24 Z" android:fillColor="#14FF2A3C"
+        android:strokeColor="#FFFF2A3C" android:strokeWidth="5" />
+    <path android:pathData="M43,26 L63,37 L63,59 L43,70 L23,59 L23,37 Z" android:fillColor="#FFFF2A3C" />
+    <path android:pathData="M43,26 L63,37 L43,48 L23,37 Z" android:fillColor="#FFFCEE0A" />
+</vector>

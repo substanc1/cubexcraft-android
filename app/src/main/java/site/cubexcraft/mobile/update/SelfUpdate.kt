@@ -32,16 +32,24 @@ object SelfUpdate {
 
     class Release(val version: String, val versionCode: Int, val url: String, val sha256: String, val size: Long)
 
-    /** Status line for the UI: null when there is nothing to say. */
-    @Volatile var status: String? = null
-        private set
-    var onStatus: ((String?) -> Unit)? = null
-    @Volatile private var running = false
+    /** What the update window shows (design 11). */
+    sealed class State {
+        object Idle : State()
+        class Downloading(val version: String, val done: Long, val total: Long) : State()
+        class Installing(val version: String) : State()
+        class Failed(val message: String) : State()
+    }
 
-    private fun say(s: String?) {
-        status = s
-        s?.let { Log.i(TAG, it) }
-        onStatus?.invoke(s)
+    @Volatile var state: State = State.Idle
+        private set
+    var onState: ((State) -> Unit)? = null
+    @Volatile private var running = false
+    @Volatile private var version = ""
+
+    private fun set(s: State) {
+        state = s
+        if (s is State.Failed) Log.w(TAG, s.message)
+        onState?.invoke(s)
     }
 
     fun start(ctx: Context) {
@@ -53,19 +61,24 @@ object SelfUpdate {
                 File(app.cacheDir, DIR).listFiles()?.forEach { it.delete() }   // the APK of an update that is installed by now
                 val r = latest() ?: return@thread
                 if (r.versionCode <= BuildConfig.VERSION_CODE) return@thread
-                say("Обновление ${r.version}: скачиваю…")
+                version = r.version
+                set(State.Downloading(r.version, 0, r.size))
                 val apk = File(File(app.cacheDir, DIR).apply { mkdirs() }, "CubeX-${r.versionCode}.apk")
-                Sync.fetchAll(Api.http, listOf(Download(r.url, apk, r.size, "")))
+                var last = 0L
+                Sync.fetchAll(Api.http, listOf(Download(r.url, apk, r.size, ""))) { _, _, bytes, total ->
+                    val now = System.currentTimeMillis()
+                    if (now - last > 200) { last = now; set(State.Downloading(r.version, bytes, total)) }
+                }
                 val got = sha256(apk)
                 if (got != r.sha256.lowercase()) {
                     apk.delete()
-                    error("SHA-256 не совпал")
+                    error("SHA-256")
                 }
-                say("Обновление ${r.version}: устанавливаю…")
+                set(State.Installing(r.version))
                 commit(app, apk)
             } catch (t: Throwable) {
                 Log.w(TAG, "update failed", t)
-                say("Обновление не удалось: ${t.message ?: t.javaClass.simpleName}")
+                set(State.Failed(t.message ?: t.javaClass.simpleName))
             } finally {
                 running = false
             }
@@ -110,9 +123,9 @@ object SelfUpdate {
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
                 ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            PackageInstaller.STATUS_SUCCESS -> say("Обновление установлено")
-            PackageInstaller.STATUS_FAILURE_ABORTED -> say(null)
-            else -> say("Обновление не установлено: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "status $st"}")
+            PackageInstaller.STATUS_SUCCESS -> set(State.Idle)
+            PackageInstaller.STATUS_FAILURE_ABORTED -> set(State.Idle)
+            else -> set(State.Failed(intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "status $st"))
         }
     }
 

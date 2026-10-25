@@ -40,7 +40,7 @@ object Launch {
 
     fun config(
         ctx: Context, profile: JSONObject, layout: GameLayout, runtime: Runtimes.Paths, session: Session,
-        windowWidth: Int, windowHeight: Int, joinServer: Boolean,
+        windowWidth: Int, windowHeight: Int, joinServer: Boolean, server: String? = null,
     ): LaunchConfig {
         val c = LaunchConfig()
         val version = profile.optString("version", "1.21.1")
@@ -126,7 +126,10 @@ object Launch {
             i++
         }
         c.programArgs += listOf("--width", windowWidth.toString(), "--height", windowHeight.toString())
-        if (joinServer) {
+        // the server the player chose on the main screen; without one — the profile's first
+        if (server != null) {
+            c.programArgs += listOf("--quickPlayMultiplayer", server)
+        } else if (joinServer) {
             val s = profile.optJSONArray("servers")?.optJSONObject(0)
             if (s != null) c.programArgs += listOf("--quickPlayMultiplayer", "${s.optString("serverAddress")}:${s.optInt("serverPort", 25565)}")
         }

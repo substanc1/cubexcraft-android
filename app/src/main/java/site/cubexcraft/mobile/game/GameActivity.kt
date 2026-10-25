@@ -50,6 +50,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         const val EXTRA_TOKEN = "token"
         const val EXTRA_JOIN = "join"
         const val EXTRA_SCALE = "scale"
+        const val EXTRA_SERVER = "server"
         private const val TAG = "CubexGame"
 
         // «#» starts a section (the same text as CubeXCraft for iPhone)
@@ -114,6 +115,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var view: GameView
     private lateinit var controls: TouchControls
     private lateinit var root: FrameLayout
+    private var overlay: LaunchOverlay? = null
     private var help: View? = null
     private var started = false
     private var viewW = 0
@@ -130,14 +132,18 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         view = GameView(this)
         view.holder.addCallback(this)
         val layout = GameLayout(this, intent.getStringExtra(EXTRA_FILES_DIR) ?: "CubeXCraft-mobile")
+        // the log of the last run must not look like this one's progress (LaunchOverlay reads it)
+        File(layout.client, "logs/latest.log").takeIf { it.isFile }?.renameTo(File(layout.client, "logs/latest-previous.log"))
         controls = TouchControls(this, File(layout.client, "options.txt"),
             onKeyboard = { show -> keyboard(show) },
             onHelp = { showHelp() },
-            onGrab = { grabbing -> if (grabbing) keyboard(false) },
+            onGrab = { grabbing -> if (grabbing) keyboard(false); overlay?.onGrab(grabbing) },
         )
         root = FrameLayout(this)
         root.addView(view)
         root.addView(controls)
+        overlay = LaunchOverlay(this, File(layout.client, "logs/latest.log"), intent.getBooleanExtra(EXTRA_JOIN, false)) { cancelGame() }
+        root.addView(overlay)
         setContentView(root)
         CallbackBridge.addGrabListener(controls)
         immersive()
@@ -146,6 +152,12 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     override fun onDestroy() {
         CallbackBridge.removeGrabListener(controls)
         super.onDestroy()
+    }
+
+    /** «Отмена» on the start screen: the game process ends, the launcher comes back (no error). */
+    private fun cancelGame() {
+        Core.host().onGameExit(this, 0, false)
+        android.os.Process.killProcess(android.os.Process.myPid())
     }
 
     @Suppress("DEPRECATION")
@@ -260,7 +272,8 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             val session = Session(
                 intent.getStringExtra(EXTRA_USERNAME)!!, intent.getStringExtra(EXTRA_UUID)!!, intent.getStringExtra(EXTRA_TOKEN)!!,
             )
-            val cfg = Launch.config(this, profile, layout, runtime, session, fbW, fbH, intent.getBooleanExtra(EXTRA_JOIN, false))
+            val cfg = Launch.config(this, profile, layout, runtime, session, fbW, fbH, intent.getBooleanExtra(EXTRA_JOIN, false),
+                intent.getStringExtra(EXTRA_SERVER))
             File(layout.client, "logs/launch-command.txt").writeText(Launch.redacted(cfg))
             val lib = File(runtime.javaHome, "lib")
             Log.i(TAG, "launch: heap ${cfg.heapMb} MB, window ${fbW}x$fbH, java ${runtime.javaHome}: " +

@@ -10,7 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import site.cubexcraft.core.CoreHost
-import site.cubexcraft.mobile.ui.DevActivity
+import site.cubexcraft.mobile.ui.MainActivity
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -57,10 +57,10 @@ class Host(private val app: Context) : CoreHost {
     override fun onGameExit(context: Context, code: Int, isSignal: Boolean) {
         Log.i("CubexHost", "game exit code=$code signal=$isSignal")
         app.startActivity(
-            Intent(app, DevActivity::class.java)
+            Intent(app, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .putExtra(DevActivity.EXTRA_EXIT_CODE, code)
-                .putExtra(DevActivity.EXTRA_EXIT_SIGNAL, isSignal)
+                .putExtra(MainActivity.EXTRA_EXIT_CODE, code)
+                .putExtra(MainActivity.EXTRA_EXIT_SIGNAL, isSignal)
         )
     }
 }

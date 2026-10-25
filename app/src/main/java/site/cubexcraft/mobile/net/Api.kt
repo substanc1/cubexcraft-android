@@ -90,4 +90,24 @@ object Api {
     fun news(): JSONObject = obj("/news")
 
     fun servers(): JSONObject = obj("/servers")
+
+    /** {cubex, nanites}. */
+    fun wallet(token: String): JSONObject = obj("/wallet", token)
+
+    /** Friends, requests and notifications in one answer (launcher-friends.js «snapshot»). */
+    fun friends(token: String): JSONObject = obj("/friends", token)
+
+    /** «In the app» every ~30 s (state online / away / playing + server); answers with the same snapshot. */
+    fun presence(token: String, state: String, server: String? = null): JSONObject =
+        obj("/presence", token, JSONObject().put("state", state).apply { if (server != null) put("server", server) })
+
+    fun presenceOffline(token: String) {
+        call("/presence/offline", token, JSONObject())
+    }
+
+    fun friendAccept(token: String, username: String): JSONObject = obj("/friends/accept", token, JSONObject().put("username", username))
+
+    fun friendDecline(token: String, username: String): JSONObject = obj("/friends/decline", token, JSONObject().put("username", username))
+
+    fun notificationsRead(token: String): JSONObject = obj("/notifications/read", token, JSONObject())
 }
