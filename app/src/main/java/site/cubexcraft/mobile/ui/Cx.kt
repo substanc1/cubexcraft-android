@@ -51,10 +51,11 @@ object Cx {
 
     fun alpha(color: Int, a: Float) = (color and 0xFFFFFF) or ((a * 255).toInt().coerceIn(0, 255) shl 24)
 
-    enum class Font(val file: String) {
-        DISPLAY("Unbounded-ExtraBold.ttf"), DISPLAY_SEMI("Unbounded-SemiBold.ttf"),
-        BODY("Manrope-Regular.ttf"), BODY_SEMI("Manrope-SemiBold.ttf"),
-        MONO("JetBrainsMono-Regular.ttf"), MONO_BOLD("JetBrainsMono-Bold.ttf"),
+    /** The launcher UI's variable fonts (assets/cxc-ui/fonts, OFL) at the design's weights: one file per family for both. */
+    enum class Font(val file: String, val weight: Int) {
+        DISPLAY("Unbounded.ttf", 800), DISPLAY_SEMI("Unbounded.ttf", 600),
+        BODY("Manrope.ttf", 400), BODY_SEMI("Manrope.ttf", 600),
+        MONO("JetBrainsMono.ttf", 400), MONO_BOLD("JetBrainsMono.ttf", 700),
     }
 
     private val faces = arrayOfNulls<Typeface>(Font.entries.size)
@@ -64,8 +65,9 @@ object Cx {
 
     /** Loaded on first use (a few ms each), not at start. */
     fun face(f: Font): Typeface = faces[f.ordinal] ?: synchronized(faces) {
-        faces[f.ordinal] ?: runCatching { Typeface.createFromAsset(app.assets, "fonts/" + f.file) }.getOrDefault(Typeface.DEFAULT)
-            .also { faces[f.ordinal] = it }
+        faces[f.ordinal] ?: runCatching {
+            Typeface.Builder(app.assets, "cxc-ui/fonts/" + f.file).setFontVariationSettings("'wght' ${f.weight}").build()
+        }.getOrDefault(Typeface.DEFAULT).also { faces[f.ordinal] = it }
     }
 }
 

@@ -40,11 +40,12 @@ import java.io.RandomAccessFile
 class LaunchOverlay(ctx: Context, private val log: File, private val join: Boolean, private val onCancel: () -> Unit) : FrameLayout(ctx) {
     private val ui = Handler(Looper.getMainLooper())
     private val prefs = ctx.getSharedPreferences("launch", Context.MODE_PRIVATE)
-    private val names = listOf(L.t("Подготовка Java", "Preparing Java"), L.t("Загрузка модов", "Loading mods"), L.t("Запуск мира", "Starting the world"))
-    private val stages = if (join) 3 else 2
-    private val estimate = LongArray(3) { i -> prefs.getLong("stage$i", longArrayOf(15, 50, 30)[i]) }
-    private val began = LongArray(3)
-    private val took = LongArray(3) { -1 }
+    private val names = listOf(L.t("Подготовка Java", "Preparing Java"), L.t("Загрузка модов", "Loading mods"))
+    // until the game's window: from there its own loading screen shows (as on iPhone)
+    private val stages = 2
+    private val estimate = LongArray(2) { i -> prefs.getLong("stage$i", longArrayOf(6, 20)[i]) }
+    private val began = LongArray(2)
+    private val took = LongArray(2) { -1 }
     @Volatile private var stage = 0
     @Volatile private var gone = false
     private val start = SystemClock.elapsedRealtime()
@@ -79,11 +80,14 @@ class LaunchOverlay(ctx: Context, private val log: File, private val join: Boole
         val side = maxOf(ctx.dp(16), (resources.displayMetrics.widthPixels - ctx.dp(560)) / 2)
         val col = ctx.vbox().apply { setPadding(side, ctx.dp(16), side, ctx.dp(16)) }
         col.addView(ctx.hbox().apply {
-            addView(ctx.icon(R.drawable.ic_play, 24, Cx.TEXT), lp(ctx.dp(24), ctx.dp(24)).margins(r = ctx.dp(16)))
-            addView(ctx.text(L.t("Запуск", "Starting"), Cx.Font.DISPLAY_SEMI, 15f, Cx.TEXT, 0.06f, upper = true))
+            addView(ctx.icon(R.drawable.logo_cube, 26, 0).apply { imageTintList = null }, lp(ctx.dp(26), ctx.dp(29)).margins(r = ctx.dp(12)))
+            addView(ctx.text("CUBE", Cx.Font.DISPLAY, 13f, 0xFFF7EAEA.toInt(), 0.1f))
+            addView(ctx.text("X", Cx.Font.DISPLAY, 13f, Cx.ACCENT, 0.1f))
+            addView(ctx.text("CRAFT", Cx.Font.DISPLAY, 13f, 0xFFF7EAEA.toInt(), 0.1f))
         })
-        col.addView(ctx.text(L.t("Запускаем CubeXCraft", "Starting CubeXCraft"), Cx.Font.DISPLAY, 20f, Cx.TEXT_HI), lp().margins(t = ctx.dp(20)))
-        col.addView(ctx.text(L.t("Обычно 1–2 минуты. Экран можно не трогать.", "Usually 1–2 minutes. No need to touch the screen."), Cx.Font.BODY, 14f, Cx.MUTED), lp().margins(t = ctx.dp(6)))
+        col.addView(ctx.text("//  " + L.t("Запуск игры", "Starting the game"), Cx.Font.MONO, 11f, Cx.WARNING, 0.2f, upper = true), lp().margins(t = ctx.dp(18)))
+        col.addView(ctx.text(L.t("Запускаем CubeXCraft", "Starting CubeXCraft"), Cx.Font.DISPLAY, 24f, Cx.TEXT_HI), lp().margins(t = ctx.dp(8)))
+        col.addView(ctx.text(L.t("Готовим Java и моды — дальше игра покажет свою загрузку.", "Preparing Java and the mods — then the game shows its own loading."), Cx.Font.BODY, 14f, Cx.MUTED), lp().margins(t = ctx.dp(6)))
         for (i in 0 until stages) {
             val mark = FrameLayout(ctx)
             val name = ctx.text(names[i], Cx.Font.DISPLAY_SEMI, 14f, Cx.TEXT)
@@ -202,8 +206,7 @@ class LaunchOverlay(ctx: Context, private val log: File, private val join: Boole
         when {
             // the game shows its own error screen: let the player see it
             "ModLoadingException" in l || "Crash report saved" in l || "Failed to load mods" in l -> ui.post { finish(save = false) }
-            "Game took" in l || ("CubeXCraft Intro" in l && "TitleScreen" in l) -> next(2)
-            join && ("Time from main menu to in-game" in l || ("CubeXCraft Intro" in l && "begin replay" in l)) -> next(3)
+            "Backend library: LWJGL" in l || "Game took" in l -> next(2)
         }
     }
 

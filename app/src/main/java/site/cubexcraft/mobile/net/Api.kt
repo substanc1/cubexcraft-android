@@ -51,6 +51,19 @@ object Api {
 
     private fun obj(path: String, token: String? = null, body: JSONObject? = null) = JSONObject(call(path, token, body))
 
+    /** Any call of the launcher API for the web UI: (HTTP status, body). IOException: no network. */
+    fun raw(method: String, path: String, token: String?, body: String?): Pair<Int, String> {
+        val b = Request.Builder().url(BASE + path)
+            .header("X-Launcher-Platform", PLATFORM)
+            .header("X-Launcher-Version", appVersion)
+        if (token != null) b.header("Authorization", "Bearer $token")
+        when {
+            method == "GET" -> b.get()
+            else -> b.method(method, (body ?: "{}").toRequestBody(JSON_TYPE))
+        }
+        return http.newCall(b.build()).execute().use { r -> r.code to (r.body?.string().orEmpty()) }
+    }
+
     /** {accessToken, user} or a Telegram 2FA challenge {twofa:{challenge, expiresIn, bot}}. */
     fun login(login: String, password: String, device: String): JSONObject =
         obj("/auth/login", body = JSONObject().put("login", login).put("password", password).put("device", device.take(128)).put("twofa", "poll"))

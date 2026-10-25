@@ -101,7 +101,7 @@ object Dialogs {
                 }
                 buttons(sendBtn, main.button(L.t("Попробовать снова", "Try again"), BtnStyle.OUTLINE) {
                     main.closeDialog()
-                    main.startGame(if (Settings.joinServer) HomeScreen.selectedAddress() else null)
+                    main.startGame(main.lastServer)
                 })
             }
             Kind.MEMORY -> card(main, Cx.WARNING, R.drawable.ic_mem, L.t("Не хватило памяти", "Out of memory"),
@@ -121,7 +121,7 @@ object Dialogs {
                 buttons(
                     main.button(L.t("Повторить", "Retry")) {
                         main.closeDialog()
-                        main.startGame(if (Settings.joinServer) HomeScreen.selectedAddress() else null)
+                        main.startGame(main.lastServer)
                     },
                     main.button(L.t("К списку серверов", "To the server list"), BtnStyle.OUTLINE) { main.closeDialog() },
                 )

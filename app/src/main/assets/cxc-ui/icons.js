@@ -1,0 +1,33 @@
+// © 2026 CubeXCraft (https://www.cubexcraft.site). Source-available, view only — see LICENSE. The same launcher UI as CubeXCraft for iPhone.
+// Иконки интерфейса из handoff Claude Design (сетка 24×24, currentColor, stroke 1.75)
+window.CXC_ICONS = {
+ "alert": "<path d=\"M12 3.5l9.5 16.5h-19z\"/><path d=\"M12 10v4.5M12 17.4v.1\"/>",
+ "back": "<path d=\"M15 5l-7 7 7 7\"/>",
+ "bell": "<path d=\"M6 17v-6a6 6 0 0 1 12 0v6l1.5 2h-15z\"/><path d=\"M10 21h4\"/>",
+ "check": "<path d=\"M5 12.5l4.5 4.5L19 7.5\"/>",
+ "chevD": "<path d=\"M5 9l7 7 7-7\"/>",
+ "chevR": "<path d=\"M9 5l7 7-7 7\"/>",
+ "chevU": "<path d=\"M5 15l7-7 7 7\"/>",
+ "chip": "<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>",
+ "close": "<path d=\"M6 6l12 12M18 6L6 18\"/>",
+ "cube": "<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>",
+ "download": "<path d=\"M12 4v11M7 11l5 5 5-5M5 20h14\"/>",
+ "external": "<path d=\"M14 4h6v6M20 4l-9 9M18 14v5H5V6h5\"/>",
+ "gear": "<circle cx=\"12\" cy=\"12\" r=\"3.2\"/><circle cx=\"12\" cy=\"12\" r=\"7\"/><path d=\"M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8\"/>",
+ "globe": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18\"/>",
+ "info": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 11v5.5M12 7.8v.1\"/>",
+ "lock": "<rect x=\"5\" y=\"11\" width=\"14\" height=\"9\" rx=\"1.5\"/><path d=\"M8 11V8a4 4 0 0 1 8 0v3\"/>",
+ "logout": "<path d=\"M10 4H5v16h5M14 8l4 4-4 4M18 12H9\"/>",
+ "play": "<path d=\"M8 5l11 7-11 7z\"/>",
+ "plus": "<path d=\"M12 5v14M5 12h14\"/>",
+ "refresh": "<path d=\"M20 11a8 8 0 0 0-14-4.5L4 9M4 4v5h5M4 13a8 8 0 0 0 14 4.5L20 15M20 20v-5h-5\"/>",
+ "send": "<path d=\"M21 4L3 11l6 2.5L11 20l3-4.5 5 3.5z\"/><path d=\"M9 13.5L21 4\"/>",
+ "server": "<rect x=\"4\" y=\"4\" width=\"16\" height=\"6\" rx=\"1\"/><rect x=\"4\" y=\"14\" width=\"16\" height=\"6\" rx=\"1\"/><path d=\"M8 7v.1M8 17v.1\"/>",
+ "share": "<path d=\"M12 15V4M8 8l4-4 4 4M5 13v7h14v-7\"/>",
+ "spinner": "<path d=\"M12 3a9 9 0 1 0 9 9\"/>",
+ "trash": "<path d=\"M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v6M14 11v6\"/>",
+ "user": "<circle cx=\"12\" cy=\"8\" r=\"3.5\"/><path d=\"M5 20c0-4 3-6.5 7-6.5s7 2.5 7 6.5\"/>",
+ "userPlus": "<circle cx=\"10\" cy=\"8\" r=\"3.2\"/><path d=\"M4 20c0-3.5 2.7-6 6-6s6 2.5 6 6M19 8v6M16 11h6\"/>",
+ "users": "<circle cx=\"9\" cy=\"8\" r=\"3.2\"/><path d=\"M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6\"/><path d=\"M16 5.2a3.2 3.2 0 0 1 0 6.2M18 14.4c1.8.8 3 2.7 3 5.6\"/>",
+ "wifiOff": "<path d=\"M3 9a14 14 0 0 1 4-2.4M21 9a14 14 0 0 0-8-3.9M6 12.5a9 9 0 0 1 3-1.8M18 12.5a9 9 0 0 0-3.4-2M9.5 16a4.5 4.5 0 0 1 5 0M12 19.5v.1M3 3l18 18\"/>"
+};

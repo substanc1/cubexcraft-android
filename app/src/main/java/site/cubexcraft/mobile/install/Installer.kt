@@ -97,7 +97,6 @@ class Installer(private val ctx: Context, private val token: String) {
         removeExtras(plan.manifest, plan.profile, plan.layout, plan.keep)
         Tweaks.apply(plan.layout.client, plan.manifest)
         plan.layout.profileFile.writeText(plan.profile.toString())
-        BuildInfo.save(ctx, plan)
         onStatus("Сборка готова")
         return Result(plan.profile, plan.layout)
     }
