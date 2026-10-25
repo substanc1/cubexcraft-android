@@ -111,6 +111,18 @@ class MainActivity : Activity() {
                     openLink(request.url.toString())
                     return true
                 }
+
+                // the site's pictures (skins) through the app's client: through the RU relay when it is on
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
+                    val host = request.url.host ?: return null
+                    if (request.method != "GET" || (host != "www.cubexcraft.site" && host != "cubexcraft.site")) return null
+                    return runCatching {
+                        val r = Api.http.newCall(okhttp3.Request.Builder().url(request.url.toString()).build()).execute()
+                        val type = r.header("Content-Type").orEmpty().substringBefore(';').ifEmpty { "application/octet-stream" }
+                        android.webkit.WebResourceResponse(type, null, r.code, r.message.ifEmpty { "OK" },
+                            mapOf("Access-Control-Allow-Origin" to "*"), r.body!!.byteStream())
+                    }.getOrNull()
+                }
             }
         }
         bridge = WebBridge(this, web)
