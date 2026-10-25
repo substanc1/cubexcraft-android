@@ -141,7 +141,13 @@ public final class JREUtils {
      * dedicated thread after {@link #setupBridgeWindow} got the game Surface.
      */
     public static int launchJavaVM(Context ctx, LaunchConfig c) throws Throwable {
-        if (c.logFile != null) Logger.begin(c.logFile.getAbsolutePath());
+        if (c.logFile != null) {
+            // stdio_is.c opens the log with O_WRONLY|O_TRUNC, no O_CREAT: the file must exist (Amethyst creates it beforehand)
+            File parent = c.logFile.getParentFile();
+            if (parent != null) parent.mkdirs();
+            c.logFile.createNewFile();
+            Logger.begin(c.logFile.getAbsolutePath());
+        }
         setEnvironment(ctx, c);
         loadRenderer(c);
         loadRuntime(c);

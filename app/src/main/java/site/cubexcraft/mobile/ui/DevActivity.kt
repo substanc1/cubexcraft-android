@@ -93,7 +93,11 @@ class DevActivity : Activity() {
             // give the game process a moment to flush its last lines
             Thread.sleep(800)
             val log = collectLog()
-            runOnUiThread { say(log.lines().takeLast(40).joinToString("\n")) }
+            val err = runCatching { java.io.File(filesDir, "last-launch-error.txt").takeIf { it.isFile }?.readLines()?.take(3) }.getOrNull()
+            runOnUiThread {
+                say(log.lines().takeLast(40).joinToString("\n"))
+                if (!err.isNullOrEmpty()) say("ОШИБКА: " + err.joinToString("\n"))
+            }
         }
     }
 
@@ -105,9 +109,12 @@ class DevActivity : Activity() {
         val sb = StringBuilder()
         runCatching { sb.append(java.io.File(filesDir, "last-launch-error.txt").takeIf { it.isFile }?.readText().orEmpty()) }
         runCatching {
-            val p = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "time", "-t", "3000"))
-            val keep = Regex("Cubex|jrelog|LIBGL|NativeInput|DynamicLoader|AndroidRuntime|MobileGlues|EGLBridge|libc|DEBUG|ExitTrap|JLI|pojav", RegexOption.IGNORE_CASE)
-            p.inputStream.bufferedReader().useLines { lines -> lines.filter { keep.containsMatchIn(it) }.forEach { sb.append(it).append('\n') } }
+            // only our tags and the bridge's (no system noise); crashes of native code come as DEBUG/libc
+            val tags = listOf("CubexGame", "CubexCore", "CubexHost", "CubexInstall", "CubexRuntime", "CubexTweaks", "CubexRelay", "CubexDev",
+                "jrelog", "LIBGL", "NativeInput", "DynamicLoader", "EGLBridge", "MobileGlues", "ExitTrap").map { "$it:V" }
+            val cmd = arrayOf("logcat", "-d", "-v", "time", "-t", "2000") + tags + arrayOf("AndroidRuntime:E", "DEBUG:V", "libc:F", "*:S")
+            val p = Runtime.getRuntime().exec(cmd)
+            p.inputStream.bufferedReader().useLines { lines -> lines.forEach { sb.append(it).append('\n') } }
         }.onFailure { sb.append("logcat: $it\n") }
         // what the JVM printed (stdout/stderr) and the game's own log
         Installer.installed(this)?.second?.let { layout ->
