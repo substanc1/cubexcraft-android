@@ -69,9 +69,9 @@ class DevActivity : Activity() {
         col.addView(button("СКАЧАТЬ / ОБНОВИТЬ СБОРКУ") { doInstall() })
         col.addView(button("ИГРАТЬ") { doPlay(false) })
         col.addView(button("ИГРАТЬ · СРАЗУ НА СЕРВЕР") { doPlay(true) })
-        col.addView(button("ПОДЕЛИТЬСЯ ЖУРНАЛОМ (ФАЙЛ)") { thread(name = "cubex-share") { if (lastLogFile == null) collectLog(); runOnUiThread { shareLog() } } })
+        col.addView(button("ПОДЕЛИТЬСЯ ЖУРНАЛОМ (ФАЙЛ)") { bg("cubex-share") { if (lastLogFile == null) collectLog(); runOnUiThread { shareLog() } } })
         col.addView(button("ОТПРАВИТЬ ЖУРНАЛ РАЗРАБОТЧИКАМ") {
-            thread(name = "cubex-send") { val ok = LogUpload.send(this, "manual", collectLog()); say(if (ok) "журнал отправлен" else "не отправлен — нет сети или не вошли") }
+            bg("cubex-send") { val ok = LogUpload.send(this, "manual", collectLog()); say(if (ok) "журнал отправлен" else "не отправлен — нет сети или не вошли") }
         })
         col.addView(button("ВЫЙТИ ИЗ АККАУНТА") { prefs.edit().clear().apply(); refresh() })
         status = TextView(this).apply {
@@ -83,12 +83,12 @@ class DevActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(col) })
         refresh()
         showExit(intent)
-        thread(name = "cubex-probe") { Relay.probe(); runOnUiThread { say("связь: ${if (Relay.enabled) "через Москву" else "напрямую"}") } }
+        bg("cubex-probe") { Relay.probe(); runOnUiThread { say("связь: ${if (Relay.enabled) "через Москву" else "напрямую"}") } }
         SelfUpdate.onStatus = { s -> if (s != null) say(s) }
         SelfUpdate.start(this)
         // a crash of the last run (ours or Android's account of it) goes to the developers before anything else
-        thread(name = "cubex-crashes") {
-            val report = site.cubexcraft.mobile.CrashReporter.pending(this) ?: return@thread
+        bg("cubex-crashes") {
+            val report = site.cubexcraft.mobile.CrashReporter.pending(this) ?: return@bg
             say("прошлый запуск упал — отправляю отчёт разработчикам")
             val ok = LogUpload.send(this, "appcrash", report + "\n--- logcat\n" + LogUpload.logcat(1500))
             say(if (ok) "отчёт о падении отправлен" else "отчёт о падении не отправлен")
@@ -105,7 +105,7 @@ class DevActivity : Activity() {
         if (!i.hasExtra(EXTRA_EXIT_CODE)) return
         val code = i.getIntExtra(EXTRA_EXIT_CODE, 0)
         say("игра завершилась, код $code${if (i.getBooleanExtra(EXTRA_EXIT_SIGNAL, false)) " (сигнал)" else ""}")
-        thread(name = "cubex-log") {
+        bg("cubex-log") {
             // give the game process a moment to flush its last lines
             Thread.sleep(800)
             val log = collectLog()
@@ -157,6 +157,18 @@ class DevActivity : Activity() {
             Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
             "Журнал CubeX Mobile 3",
         ))
+    }
+
+    /** Background work of this screen: an error is shown and logged, it never takes the app down. */
+    private fun bg(name: String, block: () -> Unit) {
+        thread(name = name) {
+            try {
+                block()
+            } catch (t: Throwable) {
+                Log.e(TAG, name, t)
+                say("ошибка ($name): $t")
+            }
+        }
     }
 
     private fun button(label: String, onClick: () -> Unit) = Button(this).apply {

@@ -22,28 +22,29 @@ object LogUpload {
 
     fun token(ctx: Context): String? = ctx.getSharedPreferences("auth", Context.MODE_PRIVATE).getString("token", null)
 
-    /** Blocking; call off the main thread. [kind]: run, live, install, error. */
-    fun send(ctx: Context, kind: String, text: String): Boolean {
+    /** HTTP header values must be printable ASCII (OkHttp throws otherwise — a «·» here crashed the app, 25.10). */
+    private fun ascii(s: String) = s.map { if (it.code in 0x20..0x7E) it else '_' }.joinToString("")
+
+    /** Blocking; call off the main thread. [kind]: run, live, install, error. Never throws. */
+    fun send(ctx: Context, kind: String, text: String): Boolean = runCatching {
         val token = token(ctx) ?: return false
         val body = text.takeLast(MAX_CHARS)
         val gz = ByteArrayOutputStream().also { o -> GZIPOutputStream(o).use { it.write(body.toByteArray(Charsets.UTF_8)) } }.toByteArray()
+        val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else Build.HARDWARE
         val request = Request.Builder().url("$URL?kind=$kind")
             .header("Authorization", "Bearer $token")
             .header("Content-Encoding", "gzip")
-            .header("X-Launcher-Version", Api.appVersion)
-            .header("X-Device", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} · " +
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else Build.HARDWARE)
+            .header("X-Launcher-Version", ascii(Api.appVersion))
+            .header("X-Device", ascii("${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE} | $soc"))
             .post(gz.toRequestBody("text/plain; charset=utf-8".toMediaType()))
             .build()
-        return runCatching {
-            Api.http.newCall(request).execute().use { r ->
-                Log.i(TAG, "$kind: HTTP ${r.code}, ${body.length} chars, ${gz.size} bytes")
-                r.isSuccessful
-            }
-        }.getOrElse {
-            Log.w(TAG, "$kind not sent: $it")
-            false
+        Api.http.newCall(request).execute().use { r ->
+            Log.i(TAG, "$kind: HTTP ${r.code}, ${body.length} chars, ${gz.size} bytes")
+            r.isSuccessful
         }
+    }.getOrElse {
+        Log.w(TAG, "$kind not sent: $it")
+        false
     }
 
     /** Our and the bridge's logcat tags only (no system noise); native crashes show up as DEBUG/libc. */
