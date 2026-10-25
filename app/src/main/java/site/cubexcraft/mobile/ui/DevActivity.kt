@@ -66,6 +66,7 @@ class DevActivity : Activity() {
         col.addView(button("СКАЧАТЬ / ОБНОВИТЬ СБОРКУ") { doInstall() })
         col.addView(button("ИГРАТЬ") { doPlay(false) })
         col.addView(button("ИГРАТЬ · СРАЗУ НА СЕРВЕР") { doPlay(true) })
+        col.addView(button("ПОДЕЛИТЬСЯ ЖУРНАЛОМ") { thread(name = "cubex-share") { val t = lastLog.ifEmpty { collectLog() }; runOnUiThread { shareLog(t) } } })
         col.addView(button("ВЫЙТИ ИЗ АККАУНТА") { prefs.edit().clear().apply(); refresh() })
         status = TextView(this).apply {
             setPadding(0, dp(16), 0, 0)
@@ -88,6 +89,43 @@ class DevActivity : Activity() {
         if (!i.hasExtra(EXTRA_EXIT_CODE)) return
         val code = i.getIntExtra(EXTRA_EXIT_CODE, 0)
         say("игра завершилась, код $code${if (i.getBooleanExtra(EXTRA_EXIT_SIGNAL, false)) " (сигнал)" else ""}")
+        thread(name = "cubex-log") {
+            // give the game process a moment to flush its last lines
+            Thread.sleep(800)
+            val log = collectLog()
+            runOnUiThread { say(log.lines().takeLast(40).joinToString("\n")) }
+        }
+    }
+
+    /**
+     * The last run from the system log: the app may read its own lines (both processes share the uid), no permission needed.
+     * Saved next to the game logs and shared with the button, so a failed start can be diagnosed without a computer.
+     */
+    private fun collectLog(): String {
+        val sb = StringBuilder()
+        runCatching { sb.append(java.io.File(filesDir, "last-launch-error.txt").takeIf { it.isFile }?.readText().orEmpty()) }
+        runCatching {
+            val p = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "time", "-t", "3000"))
+            val keep = Regex("Cubex|jrelog|LIBGL|NativeInput|DynamicLoader|AndroidRuntime|MobileGlues|EGLBridge|libc|DEBUG|ExitTrap|JLI|pojav", RegexOption.IGNORE_CASE)
+            p.inputStream.bufferedReader().useLines { lines -> lines.filter { keep.containsMatchIn(it) }.forEach { sb.append(it).append('\n') } }
+        }.onFailure { sb.append("logcat: $it\n") }
+        // what the JVM printed (stdout/stderr) and the game's own log
+        Installer.installed(this)?.second?.let { layout ->
+            for ((name, n) in listOf("logs/launcher-native.log" to 80, "logs/latest.log" to 60)) {
+                val f = java.io.File(layout.client, name)
+                if (f.isFile) sb.append("--- $name\n").append(f.readLines().takeLast(n).joinToString("\n")).append('\n')
+            }
+        }
+        val text = sb.toString().lines().takeLast(600).joinToString("\n")
+        runCatching { java.io.File(getExternalFilesDir(null), "last-run-log.txt").writeText(text) }
+        lastLog = text
+        return text
+    }
+
+    @Volatile private var lastLog = ""
+
+    private fun shareLog(text: String) {
+        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text.takeLast(60000)), "Журнал CubeX Mobile 3"))
     }
 
     private fun button(label: String, onClick: () -> Unit) = Button(this).apply {
@@ -169,6 +207,8 @@ class DevActivity : Activity() {
     private fun doPlay(join: Boolean) = work("cubex-play") {
         val token = token() ?: error("сначала войдите")
         val (profile, layout) = Installer.installed(this) ?: error("сначала скачайте сборку")
+        java.io.File(filesDir, "last-launch-error.txt").delete()
+        lastLog = ""
         say("готовлю Java…")
         Runtimes.ensure(this)
         val s = Api.gameSession(token)

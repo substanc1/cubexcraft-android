@@ -130,13 +130,18 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             )
             val cfg = Launch.config(this, profile, layout, runtime, session, fbW, fbH, intent.getBooleanExtra(EXTRA_JOIN, false))
             File(layout.client, "logs/launch-command.txt").writeText(Launch.redacted(cfg))
-            Log.i(TAG, "launch: heap ${cfg.heapMb} MB, window ${fbW}x$fbH")
+            val lib = File(runtime.javaHome, "lib")
+            Log.i(TAG, "launch: heap ${cfg.heapMb} MB, window ${fbW}x$fbH, java ${runtime.javaHome}: " +
+                "libjli=${File(lib, "libjli.so").isFile} libjvm=${File(lib, "server/libjvm.so").isFile} " +
+                "lib/=${lib.list()?.size ?: -1} files, lwjgl jars=${runtime.lwjglJars.size}, natives=${runtime.lwjglNatives.list()?.size ?: -1}")
             val code = JREUtils.launchJavaVM(this, cfg)
             Log.i(TAG, "JVM returned $code")
             Core.host().onGameExit(this, code, false)
         } catch (t: Throwable) {
+            // -2: our code failed before or around the JVM start (-1 comes from the native launcher: no libjli / JLI_Launch)
             Log.e(TAG, "launch failed", t)
-            Core.host().onGameExit(this, -1, false)
+            runCatching { File(filesDir, "last-launch-error.txt").writeText(Log.getStackTraceString(t)) }
+            Core.host().onGameExit(this, -2, false)
         }
         android.os.Process.killProcess(android.os.Process.myPid())
     }
