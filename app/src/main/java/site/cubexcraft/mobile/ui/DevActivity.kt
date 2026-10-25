@@ -16,12 +16,15 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import site.cubexcraft.mobile.BuildConfig
 import site.cubexcraft.mobile.game.GameActivity
 import site.cubexcraft.mobile.install.Installer
 import site.cubexcraft.mobile.install.Runtimes
 import site.cubexcraft.mobile.net.Api
 import site.cubexcraft.mobile.net.ApiException
+import site.cubexcraft.mobile.net.LogUpload
 import site.cubexcraft.mobile.net.Relay
+import site.cubexcraft.mobile.update.SelfUpdate
 import java.util.Locale
 import kotlin.concurrent.thread
 
@@ -52,7 +55,7 @@ class DevActivity : Activity() {
             setPadding(dp(16), dp(24), dp(16), dp(24))
         }
         col.addView(TextView(this).apply {
-            text = "CUBEX MOBILE 3 · ТЕСТ ЯДРА"
+            text = "CUBEX MOBILE 3 · ТЕСТ ЯДРА · ${BuildConfig.VERSION_NAME}"
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
         })
@@ -66,7 +69,10 @@ class DevActivity : Activity() {
         col.addView(button("СКАЧАТЬ / ОБНОВИТЬ СБОРКУ") { doInstall() })
         col.addView(button("ИГРАТЬ") { doPlay(false) })
         col.addView(button("ИГРАТЬ · СРАЗУ НА СЕРВЕР") { doPlay(true) })
-        col.addView(button("ПОДЕЛИТЬСЯ ЖУРНАЛОМ") { thread(name = "cubex-share") { val t = lastLog.ifEmpty { collectLog() }; runOnUiThread { shareLog(t) } } })
+        col.addView(button("ПОДЕЛИТЬСЯ ЖУРНАЛОМ (ФАЙЛ)") { thread(name = "cubex-share") { if (lastLogFile == null) collectLog(); runOnUiThread { shareLog() } } })
+        col.addView(button("ОТПРАВИТЬ ЖУРНАЛ РАЗРАБОТЧИКАМ") {
+            thread(name = "cubex-send") { val ok = LogUpload.send(this, "manual", collectLog()); say(if (ok) "журнал отправлен" else "не отправлен — нет сети или не вошли") }
+        })
         col.addView(button("ВЫЙТИ ИЗ АККАУНТА") { prefs.edit().clear().apply(); refresh() })
         status = TextView(this).apply {
             setPadding(0, dp(16), 0, 0)
@@ -78,6 +84,8 @@ class DevActivity : Activity() {
         refresh()
         showExit(intent)
         thread(name = "cubex-probe") { Relay.probe(); runOnUiThread { say("связь: ${if (Relay.enabled) "через Москву" else "напрямую"}") } }
+        SelfUpdate.onStatus = { s -> if (s != null) say(s) }
+        SelfUpdate.start(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -95,44 +103,52 @@ class DevActivity : Activity() {
             val log = collectLog()
             val err = runCatching { java.io.File(filesDir, "last-launch-error.txt").takeIf { it.isFile }?.readLines()?.take(3) }.getOrNull()
             runOnUiThread {
-                say(log.lines().takeLast(40).joinToString("\n"))
+                say(log.lines().takeLast(30).joinToString("\n"))
                 if (!err.isNullOrEmpty()) say("ОШИБКА: " + err.joinToString("\n"))
             }
+            val sent = LogUpload.send(this, if (code == 0) "run" else "crash", log)
+            say(if (sent) "журнал запуска отправлен разработчикам" else "журнал не отправлен (нет сети?) — кнопка «Поделиться журналом»")
         }
     }
 
     /**
-     * The last run from the system log: the app may read its own lines (both processes share the uid), no permission needed.
-     * Saved next to the game logs and shared with the button, so a failed start can be diagnosed without a computer.
+     * Everything about the last run in one text file: our error, our and the bridge's logcat lines (the app may read its own,
+     * both processes share the uid), what the JVM printed, the game log and the launch command. Kept in logs/ (last 10), sent
+     * to the server and shared as a file.
      */
     private fun collectLog(): String {
         val sb = StringBuilder()
+        sb.append("CubeX Mobile ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}\n")
         runCatching { sb.append(java.io.File(filesDir, "last-launch-error.txt").takeIf { it.isFile }?.readText().orEmpty()) }
-        runCatching {
-            // only our tags and the bridge's (no system noise); crashes of native code come as DEBUG/libc
-            val tags = listOf("CubexGame", "CubexCore", "CubexHost", "CubexInstall", "CubexRuntime", "CubexTweaks", "CubexRelay", "CubexDev",
-                "jrelog", "LIBGL", "NativeInput", "DynamicLoader", "EGLBridge", "MobileGlues", "ExitTrap").map { "$it:V" }
-            val cmd = arrayOf("logcat", "-d", "-v", "time", "-t", "2000") + tags + arrayOf("AndroidRuntime:E", "DEBUG:V", "libc:F", "*:S")
-            val p = Runtime.getRuntime().exec(cmd)
-            p.inputStream.bufferedReader().useLines { lines -> lines.forEach { sb.append(it).append('\n') } }
-        }.onFailure { sb.append("logcat: $it\n") }
-        // what the JVM printed (stdout/stderr) and the game's own log
+        sb.append("--- logcat\n").append(LogUpload.logcat())
         Installer.installed(this)?.second?.let { layout ->
-            for ((name, n) in listOf("logs/launcher-native.log" to 80, "logs/latest.log" to 60)) {
-                val f = java.io.File(layout.client, name)
-                if (f.isFile) sb.append("--- $name\n").append(f.readLines().takeLast(n).joinToString("\n")).append('\n')
+            for ((name, n) in listOf("logs/launch-command.txt" to 5, "logs/launcher-native.log" to 400, "logs/latest.log" to 400)) {
+                sb.append(LogUpload.tail(java.io.File(layout.client, name), n))
             }
         }
-        val text = sb.toString().lines().takeLast(600).joinToString("\n")
-        runCatching { java.io.File(getExternalFilesDir(null), "last-run-log.txt").writeText(text) }
+        val text = sb.toString()
+        runCatching {
+            val dir = java.io.File(getExternalFilesDir(null), "logs").apply { mkdirs() }
+            val f = java.io.File(dir, "cubex-run-${java.text.SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(java.util.Date())}.txt")
+            f.writeText(text)
+            dir.listFiles { x -> x.name.startsWith("cubex-run-") }?.sortedByDescending { it.name }?.drop(10)?.forEach { it.delete() }
+            lastLogFile = f
+        }
         lastLog = text
         return text
     }
 
     @Volatile private var lastLog = ""
+    @Volatile private var lastLogFile: java.io.File? = null
 
-    private fun shareLog(text: String) {
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text.takeLast(60000)), "Журнал CubeX Mobile 3"))
+    /** The log as a .txt file (Telegram, mail…), not pasted text. */
+    private fun shareLog() {
+        val f = lastLogFile ?: return
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", f)
+        startActivity(Intent.createChooser(
+            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+            "Журнал CubeX Mobile 3",
+        ))
     }
 
     private fun button(label: String, onClick: () -> Unit) = Button(this).apply {
@@ -167,6 +183,7 @@ class DevActivity : Activity() {
             } catch (t: Throwable) {
                 Log.e(TAG, name, t)
                 say("ошибка: $t")
+                LogUpload.send(this, "error", "$name: " + Log.getStackTraceString(t) + "\n--- logcat\n" + LogUpload.logcat(500))
             } finally {
                 busy = false
             }

@@ -15,7 +15,8 @@ android {
         applicationId = "site.cubexcraft.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 300000
+        // test builds count up (pub_dev.sh passes -PcubexBuild=N): the app updates itself from the dev channel
+        versionCode = 300000 + ((project.findProperty("cubexBuild") as String?)?.toIntOrNull() ?: 0)
         versionName = "3.0.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -38,7 +39,7 @@ android {
         debug {
             // test builds sit next to the released app on the phone
             applicationIdSuffix = ".v3dev"
-            versionNameSuffix = "-dev"
+            versionNameSuffix = "-dev." + ((project.findProperty("cubexBuild") as String?) ?: "0")
         }
         release {
             isMinifyEnabled = true
@@ -61,6 +62,10 @@ android {
         ignoreAssetsPatterns += listOf("<dir>armeabi-v7a", "<dir>x86", "<dir>x86_64")
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -79,4 +84,5 @@ dependencies {
     implementation(files("libs/MobileGlues-release.aar", "libs/openal-soft-release.aar", "libs/lwjgl-3.3.3-natives-release.aar"))
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.tukaani:xz:1.10")
+    implementation("androidx.core:core:1.13.1")
 }

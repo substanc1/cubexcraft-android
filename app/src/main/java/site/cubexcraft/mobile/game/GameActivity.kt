@@ -25,9 +25,11 @@ import net.kdt.pojavlaunch.utils.JREUtils
 import org.json.JSONObject
 import org.lwjgl.glfw.CallbackBridge
 import site.cubexcraft.core.Core
+import site.cubexcraft.mobile.BuildConfig
 import site.cubexcraft.mobile.Host
 import site.cubexcraft.mobile.install.GameLayout
 import site.cubexcraft.mobile.install.Runtimes
+import site.cubexcraft.mobile.net.LogUpload
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -134,6 +136,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             Log.i(TAG, "launch: heap ${cfg.heapMb} MB, window ${fbW}x$fbH, java ${runtime.javaHome}: " +
                 "libjli=${File(lib, "libjli.so").isFile} libjvm=${File(lib, "server/libjvm.so").isFile} " +
                 "lib/=${lib.list()?.size ?: -1} files, lwjgl jars=${runtime.lwjglJars.size}, natives=${runtime.lwjglNatives.list()?.size ?: -1}")
+            if (BuildConfig.DEBUG) liveLog(layout)
             val code = JREUtils.launchJavaVM(this, cfg)
             Log.i(TAG, "JVM returned $code")
             Core.host().onGameExit(this, code, false)
@@ -144,6 +147,22 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             Core.host().onGameExit(this, -2, false)
         }
         android.os.Process.killProcess(android.os.Process.myPid())
+    }
+
+    /** Test builds: while the game runs, the tail of its log goes to the server every minute (a freeze shows up without exiting). */
+    private fun liveLog(layout: GameLayout) {
+        val t = Thread({
+            while (true) {
+                Thread.sleep(60_000)
+                val text = "uptime ${SystemClock.elapsedRealtime() / 1000} s\n" +
+                    LogUpload.tail(File(layout.client, "logs/latest.log"), 300) +
+                    LogUpload.tail(File(layout.client, "logs/launcher-native.log"), 100) +
+                    "--- logcat\n" + LogUpload.logcat(300)
+                LogUpload.send(this, "live", text)
+            }
+        }, "cubex-livelog")
+        t.isDaemon = true
+        t.start()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
