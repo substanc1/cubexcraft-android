@@ -25,10 +25,15 @@ object Runtimes {
     fun ensure(ctx: Context): Paths {
         val root = File(ctx.filesDir, "runtime")
         val javaHome = File(root, "jre-21")
-        // by content, not by app version: an update of the app code must not unpack the same Java again (10-20 s)
-        val stamp = "${assetText(ctx, "$JRE/version")}/" + listOf("$JRE/universal.tar.xz", "$JRE/bin-arm64.tar.xz", "$LWJGL_JARS/version")
-            .joinToString("/") { runCatching { ctx.assets.openFd(it).use { fd -> fd.length } }.getOrDefault(-1L).toString() } +
-            "/" + (ctx.assets.list(LWJGL_JARS)?.size ?: 0)
+        // by content, not by app version: an update of the app code must not unpack the same Java again (10-20 s);
+        // Java and LWJGL each by their own files, so a change of one does not unpack the other
+        fun sizes(vararg paths: String) = paths.joinToString("/") {
+            runCatching { ctx.assets.openFd(it).use { fd -> fd.length } }.getOrDefault(-1L).toString()
+        }
+        val stamp = "${assetText(ctx, "$JRE/version")}/" + sizes("$JRE/universal.tar.xz", "$JRE/bin-arm64.tar.xz")
+        val lwjglNames = ctx.assets.list(LWJGL_JARS).orEmpty().sorted()
+        val lwjglStamp = "${assetText(ctx, "$LWJGL_JARS/version")}/" + lwjglNames.joinToString(",") +
+            "/" + sizes(*lwjglNames.map { "$LWJGL_JARS/$it" }.toTypedArray())
         val marker = File(javaHome, ".cubex-version")
         if (!marker.isFile || marker.readText() != stamp) {
             val t = System.currentTimeMillis()
@@ -43,19 +48,32 @@ object Runtimes {
         val jarsDir = File(root, "lwjgl3")
         val nativesDir = File(jarsDir, "natives")
         val lwjglMarker = File(jarsDir, ".cubex-version")
-        if (!lwjglMarker.isFile || lwjglMarker.readText() != stamp) {
+        if (!lwjglMarker.isFile || lwjglMarker.readText() != lwjglStamp) {
             jarsDir.deleteRecursively()
             nativesDir.mkdirs()
-            for (name in ctx.assets.list(LWJGL_JARS).orEmpty()) {
+            for (name in lwjglNames) {
                 if (name.endsWith(".jar")) copyAsset(ctx, "$LWJGL_JARS/$name", File(jarsDir, name))
             }
             for (name in ctx.assets.list(LWJGL_NATIVES).orEmpty()) {
                 copyAsset(ctx, "$LWJGL_NATIVES/$name", File(nativesDir, name))
             }
-            lwjglMarker.writeText(stamp)
+            lwjglMarker.writeText(lwjglStamp)
         }
-        val jars = jarsDir.listFiles { f -> f.name.endsWith(".jar") }.orEmpty().sortedBy { it.name }
+        val jars = jarsDir.listFiles { f -> f.name.endsWith(".jar") && !f.name.endsWith("lwjglx.jar") }.orEmpty()
+            .sortedWith(compareBy({ classpathRank(it.name) }, { it.name }))
         return Paths(javaHome, jars, nativesDir)
+    }
+
+    /**
+     * lwjgl.jar first, the merged glfw/opengl jar second, then the rest. lwjgl.jar is a named module (org.lwjgl): NeoForge's
+     * BootstrapLauncher gives a package to the first jar that has it, and a named module that comes later cannot give it up —
+     * «Modules org.lwjgl and org.lwjgl.lwjglx export package org.lwjgl» (3.0.0-dev.4, 25.10). LWJGLX (the LWJGL 2 layer for
+     * Minecraft before 1.13) is not shipped at all.
+     */
+    private fun classpathRank(name: String) = when {
+        name == "lwjgl.jar" -> 0
+        name.endsWith("-merged-modules.jar") -> 1
+        else -> 2
     }
 
     private fun assetText(ctx: Context, path: String) = ctx.assets.open(path).use { it.readBytes().toString(Charsets.UTF_8).trim() }
