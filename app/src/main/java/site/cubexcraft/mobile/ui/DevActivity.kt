@@ -90,9 +90,10 @@ class DevActivity : Activity() {
         bg("cubex-crashes") {
             val report = site.cubexcraft.mobile.CrashReporter.pending(this) ?: return@bg
             say("прошлый запуск упал — отправляю отчёт разработчикам")
-            val ok = LogUpload.send(this, "appcrash", report + "\n--- logcat\n" + LogUpload.logcat(1500))
-            say(if (ok) "отчёт о падении отправлен" else "отчёт о падении не отправлен")
-            runOnUiThread { say(report.lines().take(12).joinToString("\n")) }
+            val ok = LogUpload.send(this, "appcrash", report.text + "\n--- logcat\n" + LogUpload.logcat(1500))
+            if (ok) report.done()
+            say(if (ok) "отчёт о падении отправлен" else "отчёт о падении не отправлен — повторю при следующем запуске")
+            runOnUiThread { say(report.text.lines().take(12).joinToString("\n")) }
         }
     }
 

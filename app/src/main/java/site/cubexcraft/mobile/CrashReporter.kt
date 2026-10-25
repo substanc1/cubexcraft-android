@@ -38,13 +38,20 @@ object CrashReporter {
     private fun processName(): String =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) android.app.Application.getProcessName().substringAfterLast(':', "main") else "app"
 
-    /** Everything not reported yet, or null. Blocking (reads files and the exit history); call off the main thread. */
-    fun pending(ctx: Context): String? {
+    /** A report and what to do once it reached the server (forget what it contains). */
+    class Report(val text: String, val done: () -> Unit)
+
+    /**
+     * Everything not reported yet, or null. Blocking (reads files and the exit history); call off the main thread. Nothing is
+     * forgotten until [Report.done]: a report the server did not take is sent again on the next start.
+     */
+    fun pending(ctx: Context): Report? {
         val sb = StringBuilder()
-        dir(ctx).listFiles()?.sortedBy { it.name }?.forEach { f ->
+        val files = dir(ctx).listFiles()?.sortedBy { it.name }.orEmpty()
+        files.forEach { f ->
             sb.append("--- ").append(f.name).append('\n').append(runCatching { f.readText() }.getOrDefault("")).append('\n')
-            f.delete()
         }
+        var seen: () -> Unit = {}
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val since = prefs.getLong("exitsSeen", 0L)
@@ -72,9 +79,13 @@ object CrashReporter {
                     }
                 }
             }
-            prefs.edit().putLong("exitsSeen", newest).apply()
+            seen = { prefs.edit().putLong("exitsSeen", newest).apply() }
         }
-        return sb.toString().takeIf { it.isNotBlank() }
+        val text = sb.toString().takeIf { it.isNotBlank() } ?: run { seen(); return null }
+        return Report(text) {
+            files.forEach { it.delete() }
+            seen()
+        }
     }
 
     private fun reasonName(r: Int) = when (r) {
