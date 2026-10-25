@@ -62,6 +62,17 @@ class LaunchOverlay(ctx: Context, private val log: File, private val join: Boole
         L.t("Кнопка «i» в игре — подсказка по всем кнопкам.", "The «i» button in the game explains every button."),
     )
 
+    private val tick = object : Runnable {
+        override fun run() {
+            if (gone) return
+            if (SystemClock.elapsedRealtime() - start > 240_000) return finish(save = false)
+            val sec = (SystemClock.elapsedRealtime() - start) / 1000
+            if (sec > 0 && sec % 6 == 0L) showTip((sec / 6).toInt())
+            paint()
+            ui.postDelayed(this, 1000)
+        }
+    }
+
     init {
         setBackgroundColor(Cx.BG)
         isClickable = true   // touches stay here, not in the game, while it loads
@@ -145,17 +156,6 @@ class LaunchOverlay(ctx: Context, private val log: File, private val join: Boole
     }
 
     private fun secText(s: Long) = if (s >= 60) L.t("${s / 60} мин ${s % 60} с", "${s / 60} min ${s % 60} s") else L.t("$s с", "$s s")
-
-    private val tick = object : Runnable {
-        override fun run() {
-            if (gone) return
-            if (SystemClock.elapsedRealtime() - start > 240_000) return finish(save = false)
-            val sec = (SystemClock.elapsedRealtime() - start) / 1000
-            if (sec > 0 && sec % 6 == 0L) showTip((sec / 6).toInt())
-            paint()
-            ui.postDelayed(this, 1000)
-        }
-    }
 
     private fun next(to: Int) = ui.post {
         if (gone || to <= stage) return@post

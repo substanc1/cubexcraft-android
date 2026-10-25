@@ -14,6 +14,7 @@ import site.cubexcraft.mobile.BuildConfig
 import site.cubexcraft.mobile.net.Api
 import site.cubexcraft.mobile.net.Download
 import site.cubexcraft.mobile.net.Sync
+import site.cubexcraft.mobile.net.SyncProgress
 import java.io.File
 import java.security.MessageDigest
 import kotlin.concurrent.thread
@@ -65,10 +66,10 @@ object SelfUpdate {
                 set(State.Downloading(r.version, 0, r.size))
                 val apk = File(File(app.cacheDir, DIR).apply { mkdirs() }, "CubeX-${r.versionCode}.apk")
                 var last = 0L
-                Sync.fetchAll(Api.http, listOf(Download(r.url, apk, r.size, ""))) { _, _, bytes, total ->
+                Sync.fetchAll(Api.http, listOf(Download(r.url, apk, r.size, "")), progress = SyncProgress { _, _, bytes, total ->
                     val now = System.currentTimeMillis()
                     if (now - last > 200) { last = now; set(State.Downloading(r.version, bytes, total)) }
-                }
+                })
                 val got = sha256(apk)
                 if (got != r.sha256.lowercase()) {
                     apk.delete()
