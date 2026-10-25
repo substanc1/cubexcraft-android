@@ -11,7 +11,22 @@ $(call import-module,prefab/bytehook)
 
 LOCAL_PATH := $(HERE_PATH)
 
-$(call import-module,prefab/androidnsbypass)
+# CubeXCraft: androidnsbypass (MIT, https://github.com/alexytomi/androidnsbypass 9f57982a) is built here from source
+# instead of the prefab package Amethyst publishes from its submodule.
+include $(CLEAR_VARS)
+LOCAL_MODULE := androidnsbypass
+LOCAL_SRC_FILES := \
+    androidnsbypass/jni.c \
+    androidnsbypass/elf_soname_patcher.c \
+    androidnsbypass/nsbypass.c \
+    androidnsbypass/nsbypass_dlfcn.c \
+    androidnsbypass/utils.c \
+    androidnsbypass/android_linker_ns.cpp
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/androidnsbypass/include
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/androidnsbypass/include
+LOCAL_CPPFLAGS := -std=c++17
+LOCAL_LDLIBS := -llog
+include $(BUILD_SHARED_LIBRARY)
 
 LOCAL_PATH := $(HERE_PATH)
 
