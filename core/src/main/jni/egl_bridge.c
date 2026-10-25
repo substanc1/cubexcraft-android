@@ -1,3 +1,5 @@
+// core — from Amethyst-Android, GNU LGPL v3 (see core/COPYING.LESSER).
+// CubeXCraft, 2026: pojavInitOpenGL tolerates unset FORCE_VSYNC / AMETHYST_RENDERER.
 #include <jni.h>
 #include <assert.h>
 #include <dlfcn.h>
@@ -156,12 +158,14 @@ void load_vulkan() {
 
 int pojavInitOpenGL() {
     // Only affects GL4ES as of now
+    // CubeXCraft: an unset variable must not crash (strcmp(NULL) was a SIGSEGV at window creation)
     const char *forceVsync = getenv("FORCE_VSYNC");
-    if (strcmp(forceVsync, "true") == 0)
+    if (forceVsync != NULL && strcmp(forceVsync, "true") == 0)
         pojav_environ->force_vsync = true;
 
     // NOTE: Override for now.
     const char *renderer = getenv("AMETHYST_RENDERER");
+    if (renderer == NULL) renderer = "opengles_mobileglues";
     if (strncmp("opengles", renderer, 8) == 0) {
         pojav_environ->config_renderer = RENDERER_GL4ES;
         if (!strcmp(renderer, "opengles3_desktopgl_zink_kopper")) {

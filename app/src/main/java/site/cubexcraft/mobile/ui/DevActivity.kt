@@ -134,6 +134,9 @@ class DevActivity : Activity() {
             for ((name, n) in listOf("logs/launch-command.txt" to 5, "logs/launcher-native.log" to 400, "logs/latest.log" to 400)) {
                 sb.append(LogUpload.tail(java.io.File(layout.client, name), n))
             }
+            // a native crash of the JVM: its report (the native and Java stacks are at the top); Minecraft's own crash report
+            LogUpload.recent(layout.client) { it.startsWith("hs_err_pid") }?.let { sb.append(LogUpload.head(it, 300)) }
+            LogUpload.recent(java.io.File(layout.client, "crash-reports")) { it.startsWith("crash-") }?.let { sb.append(LogUpload.head(it, 300)) }
         }
         val text = sb.toString()
         runCatching {

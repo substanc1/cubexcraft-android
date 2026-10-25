@@ -73,6 +73,8 @@ public final class JREUtils {
         env.put("AMETHYST_RENDERER", "opengles_mobileglues");
         env.put("LIBGL_ES", "3");
         env.put("POJAVEXEC_EGL", c.glLibrary);
+        // read by pojavInitOpenGL (egl_bridge.c); unset it was strcmp(NULL) → SIGSEGV at window creation (3.0.0-dev.5, 25.10)
+        env.put("FORCE_VSYNC", "false");
         if (c.mobileGluesDir != null) env.put("MG_DIR_PATH", c.mobileGluesDir.getAbsolutePath());
         env.put("AWTSTUB_WIDTH", Integer.toString(c.windowWidth));
         env.put("AWTSTUB_HEIGHT", Integer.toString(c.windowHeight));

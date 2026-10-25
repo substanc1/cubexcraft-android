@@ -63,4 +63,14 @@ object LogUpload {
     fun tail(f: File, n: Int): String = runCatching {
         if (!f.isFile) "" else "--- ${f.name}\n" + f.readLines().takeLast(n).joinToString("\n") + "\n"
     }.getOrDefault("")
+
+    /** First [n] lines of a text file, or "" when it does not exist. */
+    fun head(f: File, n: Int): String = runCatching {
+        if (!f.isFile) "" else "--- ${f.name}\n" + f.useLines { it.take(n).joinToString("\n") } + "\n"
+    }.getOrDefault("")
+
+    /** The newest file of [dir] whose name passes [name], if it was written in the last [maxAgeMs] (this run, not an old one). */
+    fun recent(dir: File, maxAgeMs: Long = 10 * 60_000L, name: (String) -> Boolean): File? =
+        dir.listFiles { f -> f.isFile && name(f.name) }?.maxByOrNull { it.lastModified() }
+            ?.takeIf { System.currentTimeMillis() - it.lastModified() < maxAgeMs }
 }
