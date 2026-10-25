@@ -49,7 +49,13 @@ class WebBridge(private val main: MainActivity, private val web: WebView) {
                     "cancelLogin" -> { loginCancelled = true; challenge?.let { c -> runCatching { Api.cancel2fa(c) } }; ok(id, JSONObject()) }
                     "logout" -> { main.runOnUiThread { main.logout() }; ok(id, JSONObject()) }
                     "play" -> { ok(id, JSONObject()); play(m.optString("title"), m.optString("server")) }
-                    "cancelPlay" -> { playCancelled = true; installer?.cancelled = true; ok(id, JSONObject()) }
+                    "cancelPlay" -> {
+                        playCancelled = true
+                        installer?.cancelled = true
+                        // nothing is being prepared any more (the game started or ended): back to the main screen
+                        if (!playing) emit("resume")
+                        ok(id, JSONObject())
+                    }
                     "setSetting" -> ok(id, setSetting(m.optString("key"), m.opt("value")))
                     "openURL" -> { openUrl(m.optString("url")); ok(id, JSONObject()) }
                     "share" -> { share(m.optString("url", SITE)); ok(id, JSONObject()) }

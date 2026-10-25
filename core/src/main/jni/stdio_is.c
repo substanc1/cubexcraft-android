@@ -1,3 +1,5 @@
+// core — from Amethyst-Android, GNU LGPL v3 (see core/COPYING.LESSER).
+// CubeXCraft, 2026: nominal_exit tells the app about every exit (code 0 included).
 #include <jni.h>
 #include <sys/types.h>
 #include <stdbool.h>
@@ -112,11 +114,9 @@ _Noreturn void nominal_exit(int code, bool is_signal) {
         // I mean, if Zygote can do that, why can't I?
         killpg(getpgrp(), SIGTERM);
     }
-    if(code != 0) {
-        // Exit code 0 is pretty established as "eh it's fine"
-        // so only open the GUI if the code is != 0
-        (*env)->CallStaticVoidMethod(env, exitTrap_exitClass, exitTrap_staticMethod, exitTrap_ctx, code, is_signal);
-    }
+    // CubeXCraft: the app is told about every exit, 0 included — the launcher waits for it to come back to its main screen
+    // (Amethyst showed its exit window only for errors, and a normal «Quit» left the launcher on «Preparing»)
+    (*env)->CallStaticVoidMethod(env, exitTrap_exitClass, exitTrap_staticMethod, exitTrap_ctx, code, is_signal);
     // Delete the reference, not gonna need 'em later anyway
     (*env)->DeleteGlobalRef(env, exitTrap_ctx);
     (*env)->DeleteGlobalRef(env, exitTrap_exitClass);

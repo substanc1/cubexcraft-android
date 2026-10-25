@@ -140,6 +140,16 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         web.onResume()
+        // the game's process is gone without telling us (killed by Android for memory): its end all the same
+        if (gameRunning && !gameAlive()) {
+            Log.w(TAG, "game process gone without an exit call")
+            handleExit(Intent().putExtra(EXTRA_EXIT_CODE, 0))
+        }
+    }
+
+    private fun gameAlive(): Boolean {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        return am.runningAppProcesses.orEmpty().any { it.processName == "$packageName:game" }
     }
 
     override fun onPause() {
