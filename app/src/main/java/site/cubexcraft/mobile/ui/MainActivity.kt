@@ -88,6 +88,9 @@ class MainActivity : Activity() {
         }
         setContentView(frame)
 
+        // over 2.7.x, once: its login and its game files (a short database read and renames — before the UI asks for the account)
+        site.cubexcraft.mobile.data.Migration.run(this)
+
         // first what must work even if the UI is broken: crash reports and the update that fixes it
         uploadCrashReports()
         SelfUpdate.onState = { st -> runOnUiThread { runCatching { Dialogs.update(this, st) } } }

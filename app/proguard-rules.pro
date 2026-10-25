@@ -6,3 +6,7 @@
 -keep class site.cubexcraft.core.** { *; }
 -keepclasseswithmembernames class * { native <methods>; }
 -dontwarn org.slf4j.**
+# The launcher UI calls the app through @JavascriptInterface methods (ui/WebBridge.kt), by name.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
