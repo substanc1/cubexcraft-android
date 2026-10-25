@@ -57,6 +57,8 @@ android {
 
     androidResources {
         noCompress += listOf("xz", "jar")
+        // the LWJGL natives archive carries all ABIs; only arm64 is shipped (~30 MB less)
+        ignoreAssetsPatterns += listOf("<dir>armeabi-v7a", "<dir>x86", "<dir>x86_64")
     }
 
     compileOptions {
