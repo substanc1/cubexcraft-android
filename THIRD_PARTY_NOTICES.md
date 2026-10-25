@@ -21,6 +21,7 @@ them and does not restrict their licenses. The list grows together with the code
 | androidnsbypass (in `core/src/main/jni/androidnsbypass`) | alexytomi; Billy Laws (fasthook) | MIT; BSD-2-Clause | `core/` |
 | OkHttp, Okio | Square, Inc. | Apache-2.0 | https://square.github.io/okhttp/ |
 | XZ for Java | Lasse Collin and Igor Pavlov | 0BSD (public domain) | https://tukaani.org/xz/java.html |
+| JNA native `libjnidispatch.so` 5.14.0 (android-aarch64, unmodified from JNA `dist/`) | Timothy Wall and JNA contributors | Apache-2.0 or LGPL-2.1 (dual) | https://github.com/java-native-access/jna |
 | Unbounded, JetBrains Mono, Manrope fonts | The Unbounded / JetBrains Mono / Manrope Project Authors | SIL OFL 1.1 | app fonts |
 
 Minecraft — товарный знак Mojang AB / Microsoft. Проект с Mojang и Microsoft не связан; файлов игры в репозитории нет.
