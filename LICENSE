@@ -1,0 +1,94 @@
+CubeX Mobile (Android) — лицензия на исходный код (только просмотр)
+CubeX Mobile (Android) — Source-Available License (view only)
+
+Copyright © 2026 CubeXCraft (https://www.cubexcraft.site). Все права защищены. All rights reserved.
+
+Эта лицензия распространяется на весь репозиторий, КРОМЕ папки `core/` и сторонних компонентов из THIRD_PARTY_NOTICES.md.
+Папка `core/` — библиотека запуска Java на Android на основе PojavLauncher / Angel Aura Amethyst; она распространяется по
+GNU LGPL v3 (файлы core/COPYING.LESSER и core/COPYING) вместе с правками CubeXCraft к ней.
+
+This license covers the whole repository EXCEPT the `core/` folder and the third-party components listed in
+THIRD_PARTY_NOTICES.md. The `core/` folder — the Java-on-Android runtime library based on PojavLauncher / Angel Aura
+Amethyst — is licensed under the GNU LGPL v3 (core/COPYING.LESSER and core/COPYING), including CubeXCraft's changes to it.
+
+
+РУССКИЙ
+
+1. Исходный код CubeX Mobile («Программа») открыт только для ознакомления: чтобы любой мог проверить, что приложение
+   делает на телефоне игрока, и сообщить об уязвимости. Открытый код не делает Программу свободной или общественным
+   достоянием.
+
+2. Разрешено:
+   а) просматривать и изучать исходный код;
+   б) собирать Программу из исходного кода для личной проверки на своём устройстве, не передавая сборку другим лицам;
+   в) приводить фрагменты кода в сообщениях об ошибках и уязвимостях, адресованных CubeXCraft.
+
+3. Без письменного разрешения CubeXCraft запрещено:
+   а) копировать, распространять, публиковать, продавать или иначе передавать Программу, её части или сборки — в
+      исходном или исполняемом виде;
+   б) изменять Программу и распространять изменённые версии, создавать на её основе производные работы, в том числе
+      лаунчеры для других серверов и проектов;
+   в) использовать название, логотипы, графику, дизайн интерфейса, тексты и другие материалы CubeXCraft;
+   г) удалять или изменять уведомления об авторских правах и эту лицензию;
+   д) использовать Программу или её части для обхода защиты, доступа к чужим аккаунтам или нарушения правил CubeXCraft.
+
+4. Официальные сборки распространяются только через https://www.cubexcraft.site и встроенное обновление и подписаны
+   сертификатом CubeX (SHA-256 98b07a07f3d533e764e17ca876474554fe385debb9a54add910c97200a9ce813). Их использование
+   регулируется правилами CubeXCraft.
+
+5. Библиотека `core/` и сторонние компоненты распространяются по своим лицензиям (см. THIRD_PARTY_NOTICES.md). Эта
+   лицензия не ограничивает права, которые дают их лицензии. В частности, по LGPL вы вправе изменить библиотеку `core/`,
+   собрать Программу с изменённой библиотекой и исследовать Программу в той мере, в какой это нужно для отладки таких
+   изменений.
+
+6. Присылая изменения (pull request, патч, предложение), вы передаёте CubeXCraft бессрочное и безвозмездное право
+   использовать, изменять и распространять их в составе Программы.
+
+7. Программа предоставляется «как есть», без каких-либо гарантий. CubeXCraft не отвечает за ущерб от использования
+   Программы, кроме случаев, когда такая ответственность обязательна по закону.
+
+8. При нарушении этих условий разрешения из пункта 2 прекращаются автоматически.
+
+Вопросы по лицензии: admin@cubexcraft.site.
+
+
+ENGLISH (translation)
+
+1. The source code of CubeX Mobile (the "Program") is published for review only: so that anyone can check what the app
+   does on a player's phone and report vulnerabilities. Publishing the code does not make the Program free software or
+   public domain.
+
+2. You may:
+   a) view and study the source code;
+   b) build the Program from source for personal review on your own device, without giving the build to anyone else;
+   c) quote parts of the code in bug and vulnerability reports sent to CubeXCraft.
+
+3. Without written permission from CubeXCraft you may not:
+   a) copy, distribute, publish, sell or otherwise transfer the Program, its parts or builds, in source or executable
+      form;
+   b) modify the Program and distribute modified versions, or create derivative works based on it, including launchers
+      for other servers or projects;
+   c) use the CubeXCraft name, logos, graphics, interface design, texts or other CubeXCraft materials;
+   d) remove or alter copyright notices or this license;
+   e) use the Program or its parts to bypass protection, access other people's accounts or break the CubeXCraft rules.
+
+4. Official builds are distributed only through https://www.cubexcraft.site and the built-in update and are signed with
+   the CubeX certificate (SHA-256 98b07a07f3d533e764e17ca876474554fe385debb9a54add910c97200a9ce813). Their use is
+   governed by the CubeXCraft rules.
+
+5. The `core/` library and third-party components are distributed under their own licenses (see THIRD_PARTY_NOTICES.md).
+   This license does not restrict the rights those licenses grant. In particular, under the LGPL you may modify the
+   `core/` library, build the Program with the modified library, and reverse-engineer the Program as far as needed to
+   debug such modifications.
+
+6. By submitting changes (a pull request, patch or suggestion) you grant CubeXCraft a perpetual, royalty-free right to use,
+   modify and distribute them as part of the Program.
+
+7. The Program is provided "as is", without warranty of any kind. CubeXCraft is not liable for damages arising from its
+   use, except where such liability cannot be excluded by law.
+
+8. Any breach of these terms automatically ends the permissions in section 2.
+
+License questions: admin@cubexcraft.site.
+
+If the Russian and English texts differ, the Russian text prevails.
