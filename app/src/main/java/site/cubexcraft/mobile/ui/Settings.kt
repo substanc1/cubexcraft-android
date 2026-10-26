@@ -142,8 +142,10 @@ object Settings {
         if (prefs.getString("appliedQuality", null) != applied && options.isFile) {
             runCatching {
                 val lines = options.readLines().toMutableList()
-                // no frame cap and no vsync: the helper keeps 60 by what it draws, a cap would hide what the phone can do
-                for ((k, v) in p.options + mapOf("maxFps" to "260", "enableVsync" to "false")) {
+                // frames capped at the screen's refresh (more are never shown, and the phone heats up and slows down over a
+                // long game), no vsync (with it a frame that misses the screen's refresh waits for the next one)
+                val cap = (maxRefresh(ctx) / 10 * 10).coerceIn(60, 260)
+                for ((k, v) in p.options + mapOf("maxFps" to cap.toString(), "enableVsync" to "false")) {
                     val i = lines.indexOfFirst { it.startsWith("$k:") }
                     if (i >= 0) lines[i] = "$k:$v" else lines += "$k:$v"
                 }
