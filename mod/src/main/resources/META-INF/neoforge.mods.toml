@@ -1,0 +1,28 @@
+# © 2026 CubeXCraft (https://www.cubexcraft.site). Source-available, view only — see LICENSE.
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="Source-available, view only. Copyright (c) 2026 CubeXCraft"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="CubeXCraft"
+displayURL="https://www.cubexcraft.site"
+description='''
+CubeX Mobile: keeps about 60 frames per second on phones by moving the render distance and the entity distance within the bounds the app sets; logs the frame rate. Client only; idle off the phone.
+'''
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21.1,)"
+    ordering="NONE"
+    side="CLIENT"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="[1.21.1]"
+    ordering="NONE"
+    side="CLIENT"
