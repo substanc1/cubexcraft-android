@@ -2,11 +2,15 @@
 package cubexcraft.mobileperf;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.FogRenderer;
+import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,15 +25,16 @@ import java.util.Properties;
 /**
  * CubeX Mobile keeps the frame rate on phones (owner 26.10: «минимум 60 кадров, но не в ущерб отображению»).
  *
- * <p>Where the world is heavy (the spawn with its machines and NPCs) a phone's CPU cannot draw 8 chunks at 60 FPS; on open
- * ground it can. So the render distance follows the frame rate, within the bounds the app writes to
- * config/cubexcraft-mobileperf.properties: below 58 FPS for a few seconds — one chunk less (then fewer far entities);
- * 75 FPS and more for 12 s — one step back up, never above the app's ceiling. After a step up that did not hold, the level
- * stays for 3 minutes, so the picture does not swing. The render distance only changes what is drawn: the chunk cache
- * radius comes from the server, so nothing has to be loaded again when it grows back.</p>
+ * <p>Where the world is heavy (the spawn with its machines and NPCs) a phone cannot draw it all at 60 FPS; on open ground it
+ * can. So what is drawn follows the frame rate: below 60 FPS for a few seconds — one step down, 76 FPS and more for 12 s —
+ * one step back up. The steps, the cheapest to the eye first: far entities (entity distance 0.75 → 0.5), then the fog glides
+ * in one chunk at a time down to the app's floor (Sodium does not draw what is behind the fog — the same saving as a
+ * shorter render distance, without rebuilding the world: changing the render distance itself makes Sodium throw away and
+ * rebuild every chunk), then the animated parts of block entities only to 48 and 32 blocks. After a step up that did not
+ * hold, the level stays for 3 minutes, so the picture does not swing.</p>
  *
  * <p>Idle unless the app started the game ({@code -Dcubex.mobile=true}); any error of its own switches it off, never the game.
- * Every 30 s the frame rate goes to the log (the developers read it from the test builds).</p>
+ * Every 30 s the frame rate goes to the log (the app sends it to the developers after the game).</p>
  */
 @Mod(value = MobilePerf.ID, dist = Dist.CLIENT)
 public final class MobilePerf {
@@ -48,31 +53,38 @@ public final class MobilePerf {
         Path dir = FMLPaths.CONFIGDIR.get();
         Governor g = new Governor(dir.resolve("cubexcraft-mobileperf.properties"), dir.resolve("cubexcraft-mobileperf.state"));
         NeoForge.EVENT_BUS.addListener(g::onTick);
-        LOG.info("on: render distance {}..{}, entity distance {}..{}, keep {}..{} FPS",
-            g.minRd, g.cfgMaxRd, g.minEnt, g.cfgMaxEnt, g.low, g.high);
+        // last, after any other mod's fog: we only ever bring the fog closer
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, g::onFog);
+        LOG.info("on: fog down to {} chunks, entity distance {}..{}, keep {}..{} FPS", g.minRd, g.minEnt, g.cfgMaxEnt, g.low, g.high);
     }
 
     static final class Governor {
+        /** How fast the fog's edge moves, blocks a second: a chunk in under a second, never a jump. */
+        private static final float FOG_SPEED = 24f;
+
         // bounds from the app (defaults when the file is missing)
-        final int cfgMaxRd;
-        final int minRd;
+        final int minRd;                 // the fog comes no closer than this many chunks
         final double cfgMaxEnt;
         final double minEnt;
         final int low;
         final int high;
+        /** The screen's refresh rate the app asked for (0: not known): frames above it are never shown. */
+        final int refresh;
         private final Path stateFile;
 
-        private int maxRd;               // ceiling of this session (the app's, or what the player set in the settings)
-        private double maxEnt;
-        private int beLevel;              // index in BE_LIMITS
-        private int ourRd = -1;          // the values this mod set last: anything else was the player
-        private double ourEnt = -1;
+        private double maxEnt;           // ceiling of this session (the app's, or what the player set in the settings)
+        private double ourEnt = -1;      // the value this mod set last: anything else was the player
+        private int fogSteps;            // chunks the fog is pulled in from the render distance (0: as the game)
+        private int beLevel;             // index in BE_LIMITS
+        private float fogTarget;         // blocks; 0 — the game's own fog
+        private float fogNow = -1;       // where the fog's edge is now (glides to the target); -1 — jump there
+        private long fogNanos;
         private final int[] fps = new int[12];
         private int samples;
         private int ticks;
         private boolean inWorld;
         private long worldSince;
-        private long quietUntil;          // no decision before this (a change is still showing its effect)
+        private long quietUntil;         // no decision before this (a change is still showing its effect)
         private long lastUpAt;
         private long holdUntil;          // no step up before this (the last one did not hold)
         private boolean failed;
@@ -93,27 +105,53 @@ public final class MobilePerf {
                 LOG.info("no {} — defaults", config.getFileName());
             }
             this.stateFile = state;
-            int max = intOf(p, "maxRenderDistance", 8);
-            cfgMaxRd = clamp(max, 2, 32);
-            minRd = clamp(intOf(p, "minRenderDistance", Math.max(4, max - 3)), 2, cfgMaxRd);
+            minRd = clamp(intOf(p, "minRenderDistance", 5), 2, 32);
             cfgMaxEnt = clamp(doubleOf(p, "maxEntityDistance", 0.75), 0.5, 5.0);
             minEnt = clamp(doubleOf(p, "minEntityDistance", 0.5), 0.5, cfgMaxEnt);
-            low = intOf(p, "lowFps", 58);
-            high = Math.max(low + 10, intOf(p, "highFps", 75));
+            low = intOf(p, "lowFps", 60);
+            high = Math.max(low + 10, intOf(p, "highFps", 76));
             refresh = intOf(p, "refreshRate", 0);
         }
-
-        /** The screen's refresh rate the app asked for (0: not known): frames above it are never shown. */
-        final int refresh;
 
         void onTick(ClientTickEvent.Post e) {
             if (failed) return;
             try {
                 tick();
             } catch (Throwable t) {
-                failed = true;
-                LOG.warn("switched off after an error (the game goes on)", t);
+                fail(t);
             }
+        }
+
+        /** The terrain fog of every frame: brought in to the target, gliding. */
+        void onFog(ViewportEvent.RenderFog e) {
+            if (failed || e.getMode() != FogRenderer.FogMode.FOG_TERRAIN) return;
+            try {
+                float far = e.getFarPlaneDistance();
+                float goal = fogTarget > 0 ? Math.min(far, fogTarget) : far;
+                long now = System.nanoTime();
+                float dt = fogNanos == 0 ? 0f : Math.min(0.1f, (now - fogNanos) / 1e9f);
+                fogNanos = now;
+                if (fogNow < 0) {
+                    fogNow = goal;
+                } else {
+                    float step = FOG_SPEED * dt;
+                    fogNow = fogNow < goal ? Math.min(goal, fogNow + step) : Math.max(goal, fogNow - step);
+                }
+                if (fogNow >= far - 0.01f) return;   // the game's own fog (or closer: water, the Nether, blindness)
+                float near = fogNow - Mth.clamp(fogNow / 10f, 4f, 64f);   // the game's terrain fog shape, just closer
+                e.setNearPlaneDistance(Math.min(e.getNearPlaneDistance(), near));
+                e.setFarPlaneDistance(fogNow);
+                e.setCanceled(true);
+            } catch (Throwable t) {
+                fail(t);
+            }
+        }
+
+        private void fail(Throwable t) {
+            failed = true;
+            fogTarget = 0;
+            blockEntityLimitSq = 0;
+            LOG.warn("switched off after an error (the game goes on)", t);
         }
 
         private void tick() {
@@ -127,13 +165,13 @@ public final class MobilePerf {
             if (!inWorld) enter(mc, now);
             if (++ticks % 20 != 0) return;   // client ticks are 20 a second whatever the frame rate
 
-            // the player changed a distance in the game's settings: from now on that is the ceiling
+            // the render distance is the player's (or the app's) and is never changed here: the fog stays inside it
             int rd = mc.options.renderDistance().get();
-            if (rd != ourRd) {
-                maxRd = Math.max(minRd, rd);
-                ourRd = rd;
-                LOG.info("render distance {} set in the settings — the ceiling now", rd);
+            if (fogSteps > maxFogSteps(rd)) {
+                fogSteps = maxFogSteps(rd);
             }
+            applyFog(rd);
+            // the player changed the entity distance in the game's settings: from now on that is the ceiling
             double ent = mc.options.entityDistanceScaling().get();
             if (Math.abs(ent - ourEnt) > 1e-6) {
                 maxEnt = Math.max(minEnt, ent);
@@ -155,9 +193,9 @@ public final class MobilePerf {
             int lowNow = Math.min(low, cap - 12);
             int highNow = Math.min(high, cap - 3);
             if (median(4) < lowNow) {
-                stepDown(mc, now, f);
+                stepDown(mc, now, f, rd);
             } else if (now >= holdUntil && samples >= fps.length && minOf(fps.length) >= highNow) {
-                stepUp(mc, now, f);
+                stepUp(mc, now, f, rd);
             }
         }
 
@@ -165,26 +203,27 @@ public final class MobilePerf {
             inWorld = true;
             worldSince = now;
             samples = 0;
-            maxRd = cfgMaxRd;
             maxEnt = cfgMaxEnt;
-            // start where the last session settled (the spawn is where one joins), not at the ceiling
-            int start = clamp(lastStable(), minRd, maxRd);
-            setRd(mc, start);
+            int rd = mc.options.renderDistance().get();
+            // start where the last session settled (the spawn is where one joins), not at the full distance
+            fogSteps = clamp(lastFogSteps(), 0, maxFogSteps(rd));
+            fogNow = -1;
+            applyFog(rd);
             setEnt(mc, maxEnt);
             setBe(0);
             quietUntil = now + 12_000;
-            LOG.info("in the world: render distance {} (ceiling {})", start, maxRd);
+            LOG.info("in the world: render distance {}, fog at {} chunks", rd, rd - fogSteps);
         }
 
-        private void stepDown(Minecraft mc, long now, int f) {
-            int rd = mc.options.renderDistance().get();
-            if (rd > minRd) {
-                setRd(mc, rd - 1);
-                LOG.info("{} FPS: render distance {} -> {}", f, rd, rd - 1);
-            } else if (mc.options.entityDistanceScaling().get() > minEnt + 1e-6) {
+        private void stepDown(Minecraft mc, long now, int f, int rd) {
+            if (mc.options.entityDistanceScaling().get() > minEnt + 1e-6) {
                 double ent = Math.max(minEnt, mc.options.entityDistanceScaling().get() - 0.25);
                 setEnt(mc, ent);
                 LOG.info("{} FPS: entity distance -> {}", f, ent);
+            } else if (fogSteps < maxFogSteps(rd)) {
+                fogSteps++;
+                applyFog(rd);
+                LOG.info("{} FPS: fog at {} chunks", f, rd - fogSteps);
             } else if (beLevel < BE_LIMITS.length - 1) {
                 setBe(beLevel + 1);
                 LOG.info("{} FPS: block entities drawn to {} blocks", f, BE_LIMITS[beLevel]);
@@ -197,21 +236,21 @@ public final class MobilePerf {
             if (now - lastUpAt < 40_000) holdUntil = now + 180_000;
             quietUntil = now + 6_000;
             samples = 0;
-            remember(mc.options.renderDistance().get());
+            remember();
         }
 
-        private void stepUp(Minecraft mc, long now, int f) {
+        private void stepUp(Minecraft mc, long now, int f, int rd) {
             double ent = mc.options.entityDistanceScaling().get();
-            int rd = mc.options.renderDistance().get();
             if (beLevel > 0) {
                 setBe(beLevel - 1);
                 LOG.info("{} FPS: block entities drawn to {}", f, beLevel == 0 ? "64 blocks (as the game)" : BE_LIMITS[beLevel] + " blocks");
+            } else if (fogSteps > 0) {
+                fogSteps--;
+                applyFog(rd);
+                LOG.info("{} FPS: fog at {} chunks", f, rd - fogSteps);
             } else if (ent < maxEnt - 1e-6) {
                 setEnt(mc, Math.min(maxEnt, ent + 0.25));
                 LOG.info("{} FPS: entity distance -> {}", f, Math.min(maxEnt, ent + 0.25));
-            } else if (rd < maxRd) {
-                setRd(mc, rd + 1);
-                LOG.info("{} FPS: render distance {} -> {}", f, rd, rd + 1);
             } else {
                 return;
             }
@@ -219,12 +258,15 @@ public final class MobilePerf {
             lastUpAt = now;
             quietUntil = now + 8_000;
             samples = 0;
-            remember(mc.options.renderDistance().get());
+            remember();
         }
 
-        private void setRd(Minecraft mc, int v) {
-            ourRd = v;
-            mc.options.renderDistance().set(v);
+        private int maxFogSteps(int rd) {
+            return Math.max(0, rd - minRd);
+        }
+
+        private void applyFog(int rd) {
+            fogTarget = fogSteps == 0 ? 0f : (rd - fogSteps) * 16f;
         }
 
         private void setBe(int level) {
@@ -245,8 +287,9 @@ public final class MobilePerf {
             repN++;
             if (reportAt == 0) reportAt = now + 30_000;
             if (now < reportAt) return;
-            LOG.info("30 s: FPS avg {} min {} max {} | render distance {} (ceiling {}) entity {} block entities {} | steps down {} up {}",
-                repSum / Math.max(1, repN), repMin, repMax, rd, maxRd, ent, BE_LIMITS[beLevel] == 0 ? 64 : BE_LIMITS[beLevel], repDown, repUp);
+            LOG.info("30 s: FPS avg {} min {} max {} | render distance {} fog {} chunks | entity {} block entities {} | steps down {} up {}",
+                repSum / Math.max(1, repN), repMin, repMax, rd, rd - fogSteps, ent, BE_LIMITS[beLevel] == 0 ? 64 : BE_LIMITS[beLevel],
+                repDown, repUp);
             reportAt = now + 30_000;
             repMin = Integer.MAX_VALUE;
             repMax = 0;
@@ -271,23 +314,23 @@ public final class MobilePerf {
             return m;
         }
 
-        private int lastStable() {
+        private int lastFogSteps() {
             Properties p = new Properties();
             try (InputStream in = Files.newInputStream(stateFile)) {
                 p.load(in);
-                return Integer.parseInt(p.getProperty("renderDistance", String.valueOf(cfgMaxRd)).trim());
+                return Integer.parseInt(p.getProperty("fogSteps", "0").trim());
             } catch (Exception e) {
-                return cfgMaxRd;
+                return 0;
             }
         }
 
-        private void remember(int rd) {
+        private void remember() {
             Properties p = new Properties();
-            p.setProperty("renderDistance", String.valueOf(rd));
+            p.setProperty("fogSteps", String.valueOf(fogSteps));
             try (OutputStream out = Files.newOutputStream(stateFile)) {
-                p.store(out, "CubeX Mobile: where the render distance settled last time");
+                p.store(out, "CubeX Mobile: how far in the fog settled last time");
             } catch (Exception ignored) {
-                // not worth a word: next session starts at the ceiling
+                // not worth a word: next session starts with the game's own fog
             }
         }
 

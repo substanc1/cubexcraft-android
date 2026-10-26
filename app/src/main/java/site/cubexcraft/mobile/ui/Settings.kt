@@ -60,10 +60,10 @@ object Settings {
     }
 
     /**
-     * The game's options of each quality, and the bounds the in-game helper (cubexcraft_mobileperf) moves the render distance
-     * and the entity distance in to keep ~60 FPS. Aimed at 60 FPS on a mid phone (Galaxy A35) with as little loss as possible:
-     * the distance gives way only where the world is heavy; particles «decreased», fast clouds and no entity shadows are hardly
-     * seen on a phone screen and cost the CPU every frame.
+     * The game's options of each quality, and the bounds the in-game helper (cubexcraft_mobileperf) moves the fog (minRd: the
+     * closest it comes, in chunks) and the entity distance in to keep ~60 FPS. Aimed at 60 FPS on a mid phone (Galaxy A35) with
+     * as little loss as possible: the distance gives way only where the world is heavy; particles «decreased», fast clouds and
+     * no entity shadows are hardly seen on a phone screen and cost the CPU every frame. maxRd is the render distance itself.
      */
     private class Profile(val options: Map<String, String>, val minRd: Int, val maxRd: Int, val minEnt: Double, val maxEnt: Double)
 
@@ -83,7 +83,7 @@ object Settings {
     }
 
     /** Bumped when the profiles change: the new values reach games set up with the old ones (once). */
-    private const val PROFILE_REVISION = 2
+    private const val PROFILE_REVISION = 3
 
     /** The screen's fastest refresh rate at its resolution (the game asks for it): the frame rate can never be above it. */
     private fun maxRefresh(ctx: Context): Int = runCatching {
@@ -142,7 +142,7 @@ object Settings {
         if (prefs.getString("appliedQuality", null) != applied && options.isFile) {
             runCatching {
                 val lines = options.readLines().toMutableList()
-                // no frame cap and no vsync: the helper keeps 60 by the distance, a cap would hide what the phone can do
+                // no frame cap and no vsync: the helper keeps 60 by what it draws, a cap would hide what the phone can do
                 for ((k, v) in p.options + mapOf("maxFps" to "260", "enableVsync" to "false")) {
                     val i = lines.indexOfFirst { it.startsWith("$k:") }
                     if (i >= 0) lines[i] = "$k:$v" else lines += "$k:$v"
@@ -158,8 +158,8 @@ object Settings {
             cfg.parentFile?.mkdirs()
             cfg.writeText(
                 "# CubeX Mobile (written by the app at every start)\n" +
-                    "maxRenderDistance=${p.maxRd}\nminRenderDistance=${p.minRd}\n" +
-                    "maxEntityDistance=${p.maxEnt}\nminEntityDistance=${p.minEnt}\nlowFps=58\nhighFps=75\n" +
+                    "minRenderDistance=${p.minRd}\n" +
+                    "maxEntityDistance=${p.maxEnt}\nminEntityDistance=${p.minEnt}\nlowFps=60\nhighFps=76\n" +
                     "refreshRate=${maxRefresh(ctx)}\n",
             )
             installMod(ctx, client)

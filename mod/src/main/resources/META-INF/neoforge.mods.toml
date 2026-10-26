@@ -13,7 +13,7 @@ displayName="${mod_name}"
 authors="CubeXCraft"
 displayURL="https://www.cubexcraft.site"
 description='''
-CubeX Mobile: keeps about 60 frames per second on phones by moving the render distance and the entity distance within the bounds the app sets; logs the frame rate. Client only; idle off the phone.
+CubeX Mobile: keeps about 60 frames per second on phones by moving the entity distance, the fog (Sodium does not draw what is behind it) and the block entity distance within the bounds the app sets; logs the frame rate. Client only; idle off the phone.
 '''
 
 [[dependencies.${mod_id}]]
