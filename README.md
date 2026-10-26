@@ -2,7 +2,8 @@
 
 Android-приложение Minecraft-проекта [CubeXCraft](https://www.cubexcraft.site): вход в аккаунт CubeX, установка мобильной
 сборки CubeXTech, запуск игры, новости, голосование, друзья. Написано с нуля — без кода Zalith Launcher; работает и на
-слабых телефонах (arm64, Android 8+, от 3 ГБ памяти, OpenGL ES 3.2).
+слабых телефонах (arm64, Android 8+, от 3 ГБ памяти, OpenGL ES 3.2). Интерфейс лаунчера — тот же, что в CubeXCraft для
+iPhone ([`app/src/main/assets/cxc-ui`](app/src/main/assets/cxc-ui)). Ставится поверх CubeX Mobile 2.7.x: вход и скачанная игра сохраняются.
 
 **Скачивать — только с https://www.cubexcraft.site.** Сборки из других мест не официальные.
 
