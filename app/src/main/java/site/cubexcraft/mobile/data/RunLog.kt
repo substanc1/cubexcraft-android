@@ -69,4 +69,27 @@ object RunLog {
     }
 
     fun outOfMemory(text: String) = "OutOfMemoryError" in text || "LOW_MEMORY" in text || "lowmemorykiller" in text
+
+    /**
+     * After every game, also from the released app: how fast it ran — the phone, its class, the quality, and the frame rate
+     * the in-game helper logged every 30 s (a few KB, no personal data). This is what the profiles are tuned by.
+     */
+    fun perf(ctx: Context): String {
+        val sb = StringBuilder()
+        val soc = if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}" else Build.HARDWARE
+        sb.append("CubeX Mobile ${BuildConfig.VERSION_NAME} | ${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE} | $soc\n")
+        runCatching {
+            sb.append("tier ${DeviceTier.of(ctx)} | quality ${site.cubexcraft.mobile.ui.Settings.quality}→${site.cubexcraft.mobile.ui.Settings.effective(ctx)} | shaders ${site.cubexcraft.mobile.ui.Settings.shaders} | scale ${site.cubexcraft.mobile.ui.Settings.renderScale(ctx)}")
+                .append(" | gpu ${Gpu.renderer(ctx)} | ram ${site.cubexcraft.mobile.game.Launch.totalRamMb(ctx)} MB | cpu ${DeviceTier.maxCpuKhz() / 1000} MHz\n")
+        }
+        Installer.installed(ctx)?.second?.let { layout ->
+            runCatching {
+                File(layout.client, "logs/latest.log").takeIf { it.isFile }?.useLines { lines ->
+                    lines.filter { "CubeX MobilePerf" in it || "Game took" in it || "Time from main menu" in it || "Backend library" in it }
+                        .toList().takeLast(200).forEach { sb.append(it).append('\n') }
+                }
+            }
+        }
+        return sb.toString()
+    }
 }

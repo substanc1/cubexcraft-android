@@ -14,6 +14,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.util.Log
 import android.view.KeyEvent
+import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -154,6 +155,9 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
      * The screen's fastest refresh at its resolution (a 120 Hz phone is often kept at 60 Hz for apps): otherwise the game's
      * frames stop at 60 however fast the phone draws.
      */
+    /** The refresh asked for (0 — none). */
+    private var refresh = 0f
+
     private fun fastestDisplayMode() {
         runCatching {
             val d = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display else @Suppress("DEPRECATION") windowManager.defaultDisplay
@@ -161,6 +165,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             val cur = d.mode
             val best = d.supportedModes.filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
                 .maxByOrNull { it.refreshRate } ?: return
+            refresh = best.refreshRate
             if (best.modeId != cur.modeId) {
                 window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
                 Log.i(TAG, "display mode ${best.refreshRate} Hz (was ${cur.refreshRate})")
@@ -250,7 +255,13 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         if (hasFocus) immersive()
     }
 
-    override fun surfaceCreated(holder: SurfaceHolder) {}
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        // the same wish on the game's surface itself (Android 11+), the way Android asks games to vote for their frame rate
+        if (refresh > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) runCatching {
+            holder.surface.setFrameRate(refresh, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
+            Log.i(TAG, "surface frame rate $refresh")
+        }.onFailure { Log.w(TAG, "setFrameRate: $it") }
+    }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         if (fbW == 0) {

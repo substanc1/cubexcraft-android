@@ -289,11 +289,13 @@ class MainActivity : Activity() {
         thread(name = "cubex-exit") {
             Thread.sleep(800)   // the game process flushes its last lines
             val log = RunLog.collect(this)
-            if (BuildConfig.DEBUG) LogUpload.send(this, if (code == 0) "run" else "crash", log)
             if (code != 0) runOnUiThread {
                 if (RunLog.outOfMemory(log)) Dialogs.error(this, Dialogs.Kind.MEMORY, null)
                 else Dialogs.error(this, Dialogs.Kind.CRASH, "exit code $code" + (RunLog.cause(log)?.let { " · $it" } ?: ""))
             }
+            if (BuildConfig.DEBUG) LogUpload.send(this, if (code == 0) "run" else "crash", log)
+            // how fast it ran (every build: the profiles are tuned by it)
+            LogUpload.send(this, "perf", RunLog.perf(this))
         }
     }
 

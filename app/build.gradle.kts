@@ -17,7 +17,7 @@ android {
         targetSdk = 35
         // test builds count up (pub_dev.sh passes -PcubexBuild=N): the app updates itself from the dev channel
         versionCode = 300000 + ((project.findProperty("cubexBuild") as String?)?.toIntOrNull() ?: 0)
-        versionName = "3.0.0"
+        versionName = "3.0.1"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
