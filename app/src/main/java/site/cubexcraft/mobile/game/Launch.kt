@@ -62,6 +62,7 @@ object Launch {
         c.cacheDir = ctx.cacheDir
         c.logFile = File(layout.client, "logs/launcher-native.log")
         c.mobileGluesDir = File(ctx.filesDir, "MobileGlues").apply { mkdirs() }
+        writeMobileGluesConfig(c.mobileGluesDir)
         c.windowWidth = windowWidth
         c.windowHeight = windowHeight
         c.heapMb = heapMb(ctx, profile)
@@ -90,6 +91,8 @@ object Launch {
             "-XX:G1ReservePercent=20", "-XX:G1HeapRegionSize=8M", "-XX:+ParallelRefProcEnabled", "-XX:+DisableExplicitGC",
             "-Xlog:gc:file=${File(layout.client, "logs/gc.log").absolutePath}:time,uptime:filecount=2,filesize=4M",
             "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
+            // our in-game helper (cubexcraft_mobileperf) works only on the phone
+            "-Dcubex.mobile=true",
             "-Djava.library.path=${runtime.lwjglNatives.absolutePath}$SEP${ctx.applicationInfo.nativeLibraryDir}",
             "-Dorg.lwjgl.openal.libname=${ctx.applicationInfo.nativeLibraryDir}/libopenal.so",
         )
@@ -134,6 +137,19 @@ object Launch {
             if (s != null) c.programArgs += listOf("--quickPlayMultiplayer", "${s.optString("serverAddress")}:${s.optInt("serverPort", 25565)}")
         }
         return c
+    }
+
+    /**
+     * MobileGlues' config.json (read because MG_DIR_PATH points to our folder): the cache of translated shaders on — without it
+     * every start translates hundreds of GLSL shaders to GLSL ES again on the phone's CPU (CubeXCraft for iPhone has 30 MB too).
+     * The other keys are written as the values the game ran with so far (MobileGlues' defaults without a config).
+     */
+    private fun writeMobileGluesConfig(dir: File) {
+        val json = """{"enableANGLE":0,"enableNoError":0,"enableExtComputeShader":0,"enableExtTimerQuery":0,""" +
+            """"enableExtDirectStateAccess":0,"maxGlslCacheSize":30,"angleDepthClearFixMode":0,"customGLVersion":0,""" +
+            """"fsr1Setting":0,"hideMGEnvLevel":0}"""
+        val f = File(dir, "config.json")
+        runCatching { if (!f.isFile || f.readText() != json) f.writeText(json) }
     }
 
     /** For the log: the command without the token. */

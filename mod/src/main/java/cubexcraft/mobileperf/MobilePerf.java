@@ -23,8 +23,8 @@ import java.util.Properties;
  *
  * <p>Where the world is heavy (the spawn with its machines and NPCs) a phone's CPU cannot draw 8 chunks at 60 FPS; on open
  * ground it can. So the render distance follows the frame rate, within the bounds the app writes to
- * config/cubexcraft-mobileperf.properties: below 52 FPS for a few seconds — one chunk less (then fewer far entities);
- * 70 FPS and more for 12 s — one step back up, never above the app's ceiling. After a step up that did not hold, the level
+ * config/cubexcraft-mobileperf.properties: below 58 FPS for a few seconds — one chunk less (then fewer far entities);
+ * 75 FPS and more for 12 s — one step back up, never above the app's ceiling. After a step up that did not hold, the level
  * stays for 3 minutes, so the picture does not swing. The render distance only changes what is drawn: the chunk cache
  * radius comes from the server, so nothing has to be loaded again when it grows back.</p>
  *
@@ -35,6 +35,10 @@ import java.util.Properties;
 public final class MobilePerf {
     public static final String ID = "cubexcraft_mobileperf";
     static final Logger LOG = LoggerFactory.getLogger("CubeX MobilePerf");
+    /** Block entities are drawn up to this distance squared (0: as the game does, 64 blocks); see the mixin. */
+    public static volatile int blockEntityLimitSq;
+    /** The block entity steps: off, 48 and 32 blocks. */
+    static final int[] BE_LIMITS = {0, 48, 32};
 
     public MobilePerf(IEventBus modBus) {
         if (!Boolean.getBoolean("cubex.mobile")) {
@@ -60,6 +64,7 @@ public final class MobilePerf {
 
         private int maxRd;               // ceiling of this session (the app's, or what the player set in the settings)
         private double maxEnt;
+        private int beLevel;              // index in BE_LIMITS
         private int ourRd = -1;          // the values this mod set last: anything else was the player
         private double ourEnt = -1;
         private final int[] fps = new int[12];
@@ -93,9 +98,13 @@ public final class MobilePerf {
             minRd = clamp(intOf(p, "minRenderDistance", Math.max(4, max - 3)), 2, cfgMaxRd);
             cfgMaxEnt = clamp(doubleOf(p, "maxEntityDistance", 0.75), 0.5, 5.0);
             minEnt = clamp(doubleOf(p, "minEntityDistance", 0.5), 0.5, cfgMaxEnt);
-            low = intOf(p, "lowFps", 52);
-            high = Math.max(low + 10, intOf(p, "highFps", 70));
+            low = intOf(p, "lowFps", 58);
+            high = Math.max(low + 10, intOf(p, "highFps", 75));
+            refresh = intOf(p, "refreshRate", 0);
         }
+
+        /** The screen's refresh rate the app asked for (0: not known): frames above it are never shown. */
+        final int refresh;
 
         void onTick(ClientTickEvent.Post e) {
             if (failed) return;
@@ -110,6 +119,7 @@ public final class MobilePerf {
         private void tick() {
             Minecraft mc = Minecraft.getInstance();
             if (mc.level == null || mc.player == null) {
+                if (inWorld) setBe(0);
                 inWorld = false;
                 return;
             }
@@ -141,6 +151,7 @@ public final class MobilePerf {
             int cap = mc.options.framerateLimit().get();
             if (cap >= 260) cap = Integer.MAX_VALUE;
             if (mc.options.enableVsync().get()) cap = Math.min(cap, Math.max(30, mc.getWindow().getRefreshRate()));
+            if (refresh >= 30) cap = Math.min(cap, refresh);
             int lowNow = Math.min(low, cap - 12);
             int highNow = Math.min(high, cap - 3);
             if (median(4) < lowNow) {
@@ -160,6 +171,7 @@ public final class MobilePerf {
             int start = clamp(lastStable(), minRd, maxRd);
             setRd(mc, start);
             setEnt(mc, maxEnt);
+            setBe(0);
             quietUntil = now + 12_000;
             LOG.info("in the world: render distance {} (ceiling {})", start, maxRd);
         }
@@ -173,6 +185,9 @@ public final class MobilePerf {
                 double ent = Math.max(minEnt, mc.options.entityDistanceScaling().get() - 0.25);
                 setEnt(mc, ent);
                 LOG.info("{} FPS: entity distance -> {}", f, ent);
+            } else if (beLevel < BE_LIMITS.length - 1) {
+                setBe(beLevel + 1);
+                LOG.info("{} FPS: block entities drawn to {} blocks", f, BE_LIMITS[beLevel]);
             } else {
                 quietUntil = now + 10_000;
                 return;   // at the floor: nothing more that would not spoil the picture
@@ -188,7 +203,10 @@ public final class MobilePerf {
         private void stepUp(Minecraft mc, long now, int f) {
             double ent = mc.options.entityDistanceScaling().get();
             int rd = mc.options.renderDistance().get();
-            if (ent < maxEnt - 1e-6) {
+            if (beLevel > 0) {
+                setBe(beLevel - 1);
+                LOG.info("{} FPS: block entities drawn to {}", f, beLevel == 0 ? "64 blocks (as the game)" : BE_LIMITS[beLevel] + " blocks");
+            } else if (ent < maxEnt - 1e-6) {
                 setEnt(mc, Math.min(maxEnt, ent + 0.25));
                 LOG.info("{} FPS: entity distance -> {}", f, Math.min(maxEnt, ent + 0.25));
             } else if (rd < maxRd) {
@@ -209,6 +227,12 @@ public final class MobilePerf {
             mc.options.renderDistance().set(v);
         }
 
+        private void setBe(int level) {
+            beLevel = level;
+            int b = BE_LIMITS[level];
+            blockEntityLimitSq = b * b;
+        }
+
         private void setEnt(Minecraft mc, double v) {
             ourEnt = v;
             mc.options.entityDistanceScaling().set(v);
@@ -221,8 +245,8 @@ public final class MobilePerf {
             repN++;
             if (reportAt == 0) reportAt = now + 30_000;
             if (now < reportAt) return;
-            LOG.info("30 s: FPS avg {} min {} max {} | render distance {} (ceiling {}) entity {} | steps down {} up {}",
-                repSum / Math.max(1, repN), repMin, repMax, rd, maxRd, ent, repDown, repUp);
+            LOG.info("30 s: FPS avg {} min {} max {} | render distance {} (ceiling {}) entity {} block entities {} | steps down {} up {}",
+                repSum / Math.max(1, repN), repMin, repMax, rd, maxRd, ent, BE_LIMITS[beLevel] == 0 ? 64 : BE_LIMITS[beLevel], repDown, repUp);
             reportAt = now + 30_000;
             repMin = Integer.MAX_VALUE;
             repMax = 0;

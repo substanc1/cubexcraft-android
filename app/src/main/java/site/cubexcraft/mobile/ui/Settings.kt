@@ -49,17 +49,68 @@ object Settings {
         get() = prefs.getBoolean("deviceChecked", false)
         set(v) = prefs.edit().putBoolean("deviceChecked", v).apply()
 
-    /** «Авто» by the phone's memory: under 3.5 GB economy, under 10 GB balance, more — maximum. */
+    /** «Авто» by the phone's class: memory, the fastest CPU core and the GPU (DeviceTier). */
     fun effective(ctx: Context): Quality = when (val q = quality) {
-        Quality.AUTO -> {
-            val ram = Launch.totalRamMb(ctx)
-            when {
-                ram < 3584 -> Quality.ECO
-                ram < 10240 -> Quality.BALANCE
-                else -> Quality.MAX
-            }
+        Quality.AUTO -> when (site.cubexcraft.mobile.data.DeviceTier.of(ctx)) {
+            site.cubexcraft.mobile.data.DeviceTier.LOW -> Quality.ECO
+            site.cubexcraft.mobile.data.DeviceTier.MID -> Quality.BALANCE
+            site.cubexcraft.mobile.data.DeviceTier.HIGH -> Quality.MAX
         }
         else -> q
+    }
+
+    /**
+     * The game's options of each quality, and the bounds the in-game helper (cubexcraft_mobileperf) moves the render distance
+     * and the entity distance in to keep ~60 FPS. Aimed at 60 FPS on a mid phone (Galaxy A35) with as little loss as possible:
+     * the distance gives way only where the world is heavy; particles «decreased», fast clouds and no entity shadows are hardly
+     * seen on a phone screen and cost the CPU every frame.
+     */
+    private class Profile(val options: Map<String, String>, val minRd: Int, val maxRd: Int, val minEnt: Double, val maxEnt: Double)
+
+    private fun profile(q: Quality) = when (q) {
+        Quality.MAX -> Profile(mapOf(
+            "renderDistance" to "12", "simulationDistance" to "8", "entityDistanceScaling" to "1.0", "graphicsMode" to "1",
+            "particles" to "0", "renderClouds" to "\"fast\"", "biomeBlendRadius" to "2", "mipmapLevels" to "4", "entityShadows" to "true",
+        ), minRd = 7, maxRd = 12, minEnt = 0.75, maxEnt = 1.0)
+        Quality.ECO -> Profile(mapOf(
+            "renderDistance" to "6", "simulationDistance" to "5", "entityDistanceScaling" to "0.5", "graphicsMode" to "0",
+            "particles" to "2", "renderClouds" to "\"false\"", "biomeBlendRadius" to "0", "mipmapLevels" to "2", "entityShadows" to "false",
+        ), minRd = 4, maxRd = 6, minEnt = 0.5, maxEnt = 0.5)
+        else -> Profile(mapOf(
+            "renderDistance" to "8", "simulationDistance" to "5", "entityDistanceScaling" to "0.75", "graphicsMode" to "1",
+            "particles" to "1", "renderClouds" to "\"fast\"", "biomeBlendRadius" to "1", "mipmapLevels" to "4", "entityShadows" to "false",
+        ), minRd = 5, maxRd = 8, minEnt = 0.5, maxEnt = 0.75)
+    }
+
+    /** Bumped when the profiles change: the new values reach games set up with the old ones (once). */
+    private const val PROFILE_REVISION = 2
+
+    /** The screen's fastest refresh rate at its resolution (the game asks for it): the frame rate can never be above it. */
+    private fun maxRefresh(ctx: Context): Int = runCatching {
+        val d = (ctx.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager).getDisplay(android.view.Display.DEFAULT_DISPLAY)
+        val cur = d.mode
+        d.supportedModes.filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
+            .maxOf { it.refreshRate }.toInt()
+    }.getOrDefault(60)
+
+    /**
+     * The app's own client mods (assets/mods, built from mod/ in this repository) into the game's mods folder: copied when
+     * missing or different, older versions of them removed. The installer's clean-up may remove them; this runs before every start.
+     */
+    private fun installMod(ctx: Context, client: File) {
+        val names = ctx.assets.list("mods").orEmpty().filter { it.endsWith(".jar") }
+        val mods = File(client, "mods").apply { mkdirs() }
+        for (name in names) {
+            val dest = File(mods, name)
+            val size = ctx.assets.openFd("mods/$name").use { it.length }
+            if (dest.isFile && dest.length() == size) continue
+            ctx.assets.open("mods/$name").use { i -> File(mods, "$name.part").outputStream().use { o -> i.copyTo(o) } }
+            File(mods, "$name.part").renameTo(dest)
+            Log.i(TAG, "mod $name installed")
+        }
+        // an older jar of the same mod (cubexcraft_mobileperf-1.0.0.jar when 1.0.1 ships)
+        val ids = names.map { it.substringBeforeLast('-') }.toSet()
+        mods.listFiles()?.filter { f -> f.name.endsWith(".jar") && f.name !in names && f.name.substringBeforeLast('-') in ids }?.forEach { it.delete() }
     }
 
     /** Shaders by the phone: off until the device profiles (SCRUM-390) say which phones carry them. */
@@ -85,24 +136,34 @@ object Settings {
      */
     fun applyToGame(ctx: Context, client: File) {
         val q = effective(ctx)
+        val p = profile(q)
         val options = File(client, "options.txt")
-        if (prefs.getString("appliedQuality", null) != q.name && options.isFile) {
-            val values = when (q) {
-                Quality.MAX -> mapOf("renderDistance" to "12", "simulationDistance" to "8", "graphicsMode" to "1", "entityDistanceScaling" to "1.0")
-                Quality.ECO -> mapOf("renderDistance" to "5", "simulationDistance" to "5", "graphicsMode" to "0", "entityDistanceScaling" to "0.5")
-                else -> mapOf("renderDistance" to "8", "simulationDistance" to "5", "graphicsMode" to "1", "entityDistanceScaling" to "0.75")
-            }
+        val applied = "${q.name}@$PROFILE_REVISION"
+        if (prefs.getString("appliedQuality", null) != applied && options.isFile) {
             runCatching {
                 val lines = options.readLines().toMutableList()
-                for ((k, v) in values) {
+                // no frame cap and no vsync: the helper keeps 60 by the distance, a cap would hide what the phone can do
+                for ((k, v) in p.options + mapOf("maxFps" to "260", "enableVsync" to "false")) {
                     val i = lines.indexOfFirst { it.startsWith("$k:") }
                     if (i >= 0) lines[i] = "$k:$v" else lines += "$k:$v"
                 }
                 options.writeText(lines.joinToString("\n", postfix = "\n"))
-                prefs.edit().putString("appliedQuality", q.name).apply()
-                Log.i(TAG, "quality ${q.name} written to options.txt")
+                prefs.edit().putString("appliedQuality", applied).apply()
+                Log.i(TAG, "quality $applied written to options.txt")
             }.onFailure { Log.w(TAG, "options.txt: $it") }
         }
+        // the in-game helper and its bounds (every start: the bounds follow the quality)
+        runCatching {
+            val cfg = File(client, "config/cubexcraft-mobileperf.properties")
+            cfg.parentFile?.mkdirs()
+            cfg.writeText(
+                "# CubeX Mobile (written by the app at every start)\n" +
+                    "maxRenderDistance=${p.maxRd}\nminRenderDistance=${p.minRd}\n" +
+                    "maxEntityDistance=${p.maxEnt}\nminEntityDistance=${p.minEnt}\nlowFps=58\nhighFps=75\n" +
+                    "refreshRate=${maxRefresh(ctx)}\n",
+            )
+            installMod(ctx, client)
+        }.onFailure { Log.w(TAG, "mobileperf: $it") }
         // the game's language follows the app's
         runCatching {
             if (options.isFile) {
